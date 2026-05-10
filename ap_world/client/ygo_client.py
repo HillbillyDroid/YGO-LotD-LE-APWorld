@@ -772,15 +772,26 @@ class YGOLotDContext(CommonContext):
     # ---- Crafting -------------------------------------------------------
 
     def craft_card(self, index: int) -> tuple[bool, str]:
-        """Spend DP to grant one more copy of a card index. Cap 3 per card.
-        Persists to slot-storage."""
+        """Spend DP to grant one more copy of a card index. Cap 3 per card
+        (game's hard limit). Persists to slot-storage.
+
+        Cap check uses the live in-memory card-list count rather than
+        `crafted_card_counts` so cards already owned via AP item-grants or
+        starter-archetype starter packs also count toward the cap."""
         if not self.save_data_ready:
             return (False, "not connected")
         card = BY_INDEX.get(index)
         if card is None:
             return (False, f"unknown card index {index}")
-        cur_count = self.crafted_card_counts.get(index, 0)
-        if cur_count >= 3:
+        try:
+            live_count = self.memory.read_card_count(index)
+        except _PROCESS_GONE_ERRORS as e:
+            self._handle_process_gone(e)
+            return (False, "game process gone — wait for relaunch")
+        except Exception as e:
+            logger.exception(f"read_card_count failed: {e}")
+            return (False, "card count read failed")
+        if live_count >= 3:
             return (False, f"already at cap (3) for {card['name']}")
         cost = crafting_cost_for_card(card)
         try:

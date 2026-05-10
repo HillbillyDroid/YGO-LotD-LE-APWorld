@@ -319,6 +319,23 @@ class YGOLotDManager(GameManager):
         except Exception:
             return 0
 
+    def _read_card_count_safe(self, index: int) -> int:
+        """Best-effort read of the live card-list count for `index`.
+
+        Returns 0 if save data isn't ready or the read fails. Used by the
+        Crafting tab to gate the Buy button on the actual in-game owned
+        count (which can include AP item-grants and starter-archetype
+        cards, not just `crafted_card_counts`)."""
+        if not self.ctx.save_data_ready:
+            return 0
+        try:
+            return int(self.ctx.memory.read_card_count(index))
+        except _PROCESS_GONE_ERRORS as e:
+            self.ctx._handle_process_gone(e)
+            return 0
+        except Exception:
+            return 0
+
     def _owned_item_names(self) -> set[str]:
         names: set[str] = set()
         for it in self.ctx.items_received:
@@ -977,8 +994,16 @@ class YGOLotDManager(GameManager):
         self._update_crafting_dp()
         self._render_crafting_results()
 
+    @staticmethod
+    def _cost_label_text(cost: int, owned: int) -> str:
+        if owned >= 3:
+            return "Cap (3/3)"
+        return f"{cost:,} DP"
+
     def _update_crafting_dp(self) -> None:
-        """Cheap update — just the DP label and per-row button disabled state.
+        """Cheap update — DP label, per-row Buy disabled state, per-row cost
+        label (which flips to "Cap (3/3)" once the player owns 3 copies of
+        that card via any path: AP grant, archetype starter, or crafting).
         Does NOT rebuild result rows."""
         if self._dp_label is None or self._results_view is None:
             return
@@ -988,9 +1013,14 @@ class YGOLotDManager(GameManager):
         for row in self._results_view.children:
             cost = getattr(row, "_buy_cost", None)
             btn = getattr(row, "_buy_btn", None)
-            if cost is None or btn is None:
+            idx = getattr(row, "_buy_idx", None)
+            cost_lbl = getattr(row, "_cost_label", None)
+            if cost is None or btn is None or idx is None:
                 continue
-            btn.disabled = (not ready) or (dp < cost)
+            owned = self._read_card_count_safe(idx)
+            btn.disabled = (not ready) or (dp < cost) or (owned >= 3)
+            if cost_lbl is not None:
+                cost_lbl.text = self._cost_label_text(cost, owned)
 
     def _render_crafting_results(self) -> None:
         if self._results_view is None or self._dp_label is None:
@@ -1029,16 +1059,22 @@ class YGOLotDManager(GameManager):
             label_text = f"{name}  [staple]" if is_staple else name
             name_lbl = Label(text=label_text, size_hint_x=0.6, halign="left", valign="middle")
             name_lbl.bind(size=name_lbl.setter("text_size"))
-            cost_lbl = Label(text=f"{cost:,} DP", size_hint_x=0.2, halign="right", valign="middle")
+            owned = self._read_card_count_safe(idx)
+            cost_lbl = Label(
+                text=self._cost_label_text(cost, owned),
+                size_hint_x=0.2, halign="right", valign="middle",
+            )
             cost_lbl.bind(size=cost_lbl.setter("text_size"))
             buy_btn = Button(text="Buy", size_hint_x=0.2)
-            buy_btn.disabled = (not ready) or (dp < cost)
+            buy_btn.disabled = (not ready) or (dp < cost) or (owned >= 3)
             buy_btn.bind(on_press=lambda _btn, i=idx: self._on_buy_clicked(i))
             row.add_widget(name_lbl)
             row.add_widget(cost_lbl)
             row.add_widget(buy_btn)
             row._buy_cost = cost
             row._buy_btn = buy_btn
+            row._buy_idx = idx
+            row._cost_label = cost_lbl
             self._results_view.add_widget(row)
 
         if truncated_total > 0:

@@ -348,7 +348,12 @@ class MemoryHandle:
         self.pm.write_int(addr, 0)
 
     def raise_card_count(self, index: int, min_count: int) -> None:
-        """Ensure card-list byte's count nibble >= min_count, set Seen bit.
+        """Ensure card-list byte's count nibble >= min_count. Leaves the Seen
+        bit (bit 3) untouched so the in-game "NEW" marker on the trunk still
+        appears for cards the player hasn't viewed yet (the marker shows
+        when bit 3 == 0; the game flips it to 1 when the player highlights
+        the card in the deck-edit trunk).
+
         Never lowers the count (player-deck-bound copies stay where they are)."""
         if not (0 <= min_count <= 3):
             raise ValueError(f"min_count must be 0..3, got {min_count}")
@@ -357,24 +362,27 @@ class MemoryHandle:
         addr = self.save_data + CARD_LIST_OFFSET_LE2 + index
         cur = self.pm.read_uchar(addr)
         cur_count = cur & 0x07
-        if cur_count >= min_count and (cur & 0x08):
+        if cur_count >= min_count:
             return
-        new = (cur & ~0x07) | max(cur_count, min_count) | 0x08
+        new = (cur & ~0x07) | max(cur_count, min_count)
         if new == cur:
             return
         self.pm.write_uchar(addr, new)
 
     def increment_card_count(self, index: int) -> int:
-        """Add 1 to card-list byte's count nibble (clamped at 3), set Seen bit.
-        Returns the new count. Used for crafting: each purchase grants one
-        more copy until the per-card cap of 3."""
+        """Add 1 to card-list byte's count nibble (clamped at 3). Returns the
+        new count. Used for crafting: each purchase grants one more copy until
+        the per-card cap of 3.
+
+        Leaves the Seen bit untouched (see `raise_card_count` docstring) so
+        purchased cards show the in-game "NEW" trunk marker."""
         if not (0 <= index < CARD_LIST_SIZE_LE2):
             raise ValueError(f"card index {index} out of range")
         addr = self.save_data + CARD_LIST_OFFSET_LE2 + index
         cur = self.pm.read_uchar(addr)
         cur_count = cur & 0x07
         new_count = min(3, cur_count + 1)
-        new = (cur & ~0x07) | new_count | 0x08
+        new = (cur & ~0x07) | new_count
         if new != cur:
             self.pm.write_uchar(addr, new)
         return new_count
