@@ -398,6 +398,23 @@ class MemoryHandle:
         self.pm.write_longlong(addr, new)
         return new
 
+    def raise_dp_to(self, min_value: int) -> int:
+        """Ensure DuelPoints >= `min_value` (clamped to DP_MAX). Never lowers
+        DP (player spending via crafting is preserved). Returns the new value.
+
+        Used by the Stage B verify-retry path: a fresh save's New Game routine
+        writes the default DP=1000 in memory shortly after the save data
+        pointer chain becomes resolvable, which can clobber Stage B's initial
+        DP credit if the game's write fires AFTER ours. Verify-retry catches
+        the clobber and re-applies until it sticks."""
+        target = max(0, min(DP_MAX, int(min_value)))
+        addr = self._misc_addr(DUEL_POINTS_OFFSET_IN_MISC)
+        cur = self.pm.read_longlong(addr)
+        if cur >= target:
+            return cur
+        self.pm.write_longlong(addr, target)
+        return target
+
     def hide_default_cards(self) -> int:
         """Write 0 to the default-structure-deck-cards static, suppressing
         the merge of starter-deck cards into the deck-edit trunk. Returns

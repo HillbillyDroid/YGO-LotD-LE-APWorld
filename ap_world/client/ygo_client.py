@@ -51,7 +51,7 @@ from ..data.card_list import BY_INDEX
 from ..data.pack_archetypes import ARCHETYPE_CARDS, PACK_ARCHETYPES
 from .duel_watcher import DuelWatcher
 from .item_applier import ItemApplier
-from .memory import MemoryHandle
+from .memory import UNLOCKED_CONTENT_ALL, MemoryHandle
 from .save_manager import SaveManager, SaveManagerError, WorldState, _is_game_running
 from .sync_enforcer import SyncEnforcer
 
@@ -135,6 +135,19 @@ class YGOLotDContext(CommonContext):
     applied_dp_count: int = 0
     starter_granted: bool = False
     crafted_card_counts: dict[int, int]
+
+    # Initial-write race guard (Strategy 2).
+    # On a fresh save, the game's New Game routine writes default values into
+    # the save block AFTER our pointer chain resolves but BEFORE we'd normally
+    # consider the game "settled" — so Stage B's writes for UnlockedContent
+    # and initial DP can get clobbered by the game's default-init. We track a
+    # target DP floor (= 1000 default + sum of initial DP item amounts) and
+    # re-assert UnlockedContent=0x7 + raise_dp_to(floor) every tick until BOTH
+    # stick. Once verified we stop, so player crafting can spend DP without
+    # the enforcer refunding it.
+    initial_writes_verified: bool = False
+    initial_dp_floor: int = 0
+    INITIAL_DP_BASELINE: int = 1000  # default DP on a freshly-created save
 
     # Starter archetype pick (one-shot per slot). Cards are stored as a
     # {card_index: count} dict with the same shape as crafted_card_counts so
@@ -252,6 +265,8 @@ class YGOLotDContext(CommonContext):
         self.launch_required = False
         self.game_proc = None
         self.save_data_ready = False
+        self.initial_writes_verified = False
+        self.initial_dp_floor = 0
         self.connection_status = ConnectionStatus.CONNECTED
         self.status_text = "Connected — waiting for save data..."
 
@@ -545,6 +560,13 @@ class YGOLotDContext(CommonContext):
         Process-gone errors propagate out so the caller can drop the handle
         and restart Stage A; other exceptions on individual writes are
         logged but don't abort the rest of the reconcile."""
+        # Strategy 2 (initial-write race guard): on a fresh save the game's
+        # New Game routine writes default values into MiscSaveData shortly
+        # after the pointer chain resolves, which can clobber Stage B's
+        # writes for UnlockedContent and DP. Re-applied per-tick in
+        # `_tick_body` until verified.
+        self.initial_writes_verified = False
+
         try:
             self.memory.write_unlocked_content_all()
         except _PROCESS_GONE_ERRORS:
@@ -606,21 +628,48 @@ class YGOLotDContext(CommonContext):
             except Exception as e:
                 logger.exception(f"_evaluate_starter_archetype failed: {e}")
 
-        # DP reconcile. Apply (received_dp_count - applied_dp_count) items;
-        # then persist the new applied_dp_count back to slot storage.
+        # DP reconcile.
+        #
+        # First-session path (applied_dp_count == 0): a fresh save's default
+        # DP is 1000. We compute an authoritative floor = 1000 + sum(received
+        # DP item amounts) and write it via `raise_dp_to(floor)` — which never
+        # lowers DP, so re-running it after the game's New Game routine writes
+        # 1000 just bumps us back up to the full floor. The per-tick verify
+        # loop in `_tick_body` keeps re-asserting until we read back >= floor.
+        #
+        # Reconnect path (applied_dp_count > 0): DP was already credited (and
+        # possibly spent) in a prior session. Apply only the delta of new DP
+        # items via add_dp, matching the legacy behavior — no floor enforcement
+        # since the race only affects the initial game-state-init window.
         dp_amounts = self.applier.dp_item_amounts if self.applier else {}
         received_dp_items = [n for n in owned_names if n in dp_amounts]
-        delta = len(received_dp_items) - self.applied_dp_count
-        if delta > 0:
-            for name in received_dp_items[-delta:]:
-                self.memory.add_dp(int(dp_amounts[name]))
+        if self.applied_dp_count == 0:
+            received_dp_total = sum(int(dp_amounts[n]) for n in received_dp_items)
+            self.initial_dp_floor = self.INITIAL_DP_BASELINE + received_dp_total
+            try:
+                self.memory.raise_dp_to(self.initial_dp_floor)
+            except _PROCESS_GONE_ERRORS:
+                raise
+            except Exception as e:
+                logger.exception(f"raise_dp_to({self.initial_dp_floor}) failed: {e}")
             self.applied_dp_count = len(received_dp_items)
             self._persist_int(_slot_key(self, "applied_dp_count"), self.applied_dp_count)
-        elif delta < 0:
-            # Server has fewer DP items than we've applied — should never
-            # happen unless the seed was rerolled. Don't subtract; just align.
-            self.applied_dp_count = len(received_dp_items)
-            self._persist_int(_slot_key(self, "applied_dp_count"), self.applied_dp_count)
+        else:
+            delta = len(received_dp_items) - self.applied_dp_count
+            if delta > 0:
+                for name in received_dp_items[-delta:]:
+                    self.memory.add_dp(int(dp_amounts[name]))
+                self.applied_dp_count = len(received_dp_items)
+                self._persist_int(_slot_key(self, "applied_dp_count"), self.applied_dp_count)
+            elif delta < 0:
+                # Server has fewer DP items than we've applied — should never
+                # happen unless the seed was rerolled. Don't subtract; just align.
+                self.applied_dp_count = len(received_dp_items)
+                self._persist_int(_slot_key(self, "applied_dp_count"), self.applied_dp_count)
+            # Reconnect: initial-write race is over (game has been running
+            # long enough that the save block is fully initialized), so skip
+            # the per-tick verify loop. Mark verified immediately.
+            self.initial_writes_verified = True
 
         # Mark every applied item index so the live loop doesn't credit DP again.
         for idx, name in enumerate(owned_names):
@@ -813,7 +862,7 @@ class YGOLotDContext(CommonContext):
         except Exception as e:
             logger.exception(f"craft_card({index}) write failed: {e}")
             return (False, "memory write failed")
-        self.crafted_card_counts[index] = max(cur_count + 1, new_count)
+        self.crafted_card_counts[index] = max(live_count + 1, new_count)
         self._persist_crafted_indices()
         return (True, f"bought {card['name']} (x{self.crafted_card_counts[index]}) for {cost:,} DP")
 
@@ -1108,6 +1157,31 @@ class YGOLotDContext(CommonContext):
         flip save_data_ready off and trigger a reattach. Other unexpected
         exceptions in inner loops are caught + logged so one bad item doesn't
         break the rest of the tick."""
+        # 0) Initial-write verify-retry (Strategy 2).
+        # Until verified, re-assert UnlockedContent=0x7 and DP>=initial_dp_floor
+        # each tick. Verification succeeds when both reads come back at/above
+        # target; we then stop, so player crafting can spend DP without the
+        # enforcer refunding it.
+        if not self.initial_writes_verified:
+            try:
+                self.memory.write_unlocked_content_all()
+                if self.initial_dp_floor > 0:
+                    self.memory.raise_dp_to(self.initial_dp_floor)
+                content = self.memory.read_unlocked_content()
+                cur_dp = self.memory.read_dp()
+                content_ok = (content & UNLOCKED_CONTENT_ALL) == UNLOCKED_CONTENT_ALL
+                dp_ok = self.initial_dp_floor == 0 or cur_dp >= self.initial_dp_floor
+                if content_ok and dp_ok:
+                    self.initial_writes_verified = True
+                    logger.info(
+                        f"initial writes verified (UnlockedContent={content:#x}, "
+                        f"DP={cur_dp}, floor={self.initial_dp_floor})"
+                    )
+            except _PROCESS_GONE_ERRORS:
+                raise
+            except Exception as e:
+                logger.exception(f"initial-write verify-retry failed: {e}")
+
         # 1) Pump new items.
         new_items = self.items_received[self.highest_processed_item_index:]
         if new_items and self.applier is not None:
@@ -1119,6 +1193,24 @@ class YGOLotDContext(CommonContext):
                     continue
                 is_dp = name in dp_names
                 credit = is_dp and idx not in self.applied_dp_indices
+                # During the unverified race window, route DP credits through
+                # the floor (raise_dp_to) instead of add_dp — otherwise a fresh
+                # DP item arriving while the game is still clobbering DP to
+                # 1000 would lose its contribution. The floor grows by the
+                # item's amount and the per-tick verify-retry above re-asserts
+                # the new total until it sticks.
+                if is_dp and credit and not self.initial_writes_verified:
+                    amount = int(dp_names[name])
+                    self.initial_dp_floor += amount
+                    try:
+                        self.memory.raise_dp_to(self.initial_dp_floor)
+                    except _PROCESS_GONE_ERRORS:
+                        raise
+                    except Exception as e:
+                        logger.exception(f"raise_dp_to (live, unverified): {e}")
+                    self.applied_dp_indices.add(idx)
+                    self.applied_dp_count += 1
+                    continue
                 try:
                     self.applier.apply(name, credit_dp=credit)
                 except KeyError:
