@@ -1,0 +1,23 @@
+# Python bytecode + caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Editor / tooling
+.vscode/
+.idea/
+.claude/
+
+# Reference material
+tools_ref/*
+
+# Build outputs
+*.apworld
+
+# Agent context — not sure whether upstream Archipelago commits these
+CLAUDE.md
+SAVE_BACKUPS_PLAN.md

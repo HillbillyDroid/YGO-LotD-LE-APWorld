@@ -1,0 +1,1876 @@
+{
+  "packs": [
+    {
+      "short": "Grandpa Muto",
+      "name": "Grandpa Muto Pack",
+      "type": "shop",
+      "id": 1,
+      "archetypes": [
+        {
+          "enum": "Gravekeeper",
+          "display": "Gravekeeper's"
+        },
+        {
+          "enum": "Forbidden",
+          "display": "Exodia"
+        },
+        {
+          "enum": "Necrovalley",
+          "display": "Necrovalley"
+        },
+        {
+          "enum": "Exodia",
+          "display": "Exodia"
+        }
+      ]
+    },
+    {
+      "short": "Mai Valentine",
+      "name": "Mai Valentine Pack",
+      "type": "shop",
+      "id": 2,
+      "archetypes": [
+        {
+          "enum": "Guardian",
+          "display": "Guardian"
+        },
+        {
+          "enum": "Amazoness",
+          "display": "Amazoness"
+        },
+        {
+          "enum": "Harpie",
+          "display": "Harpie"
+        },
+        {
+          "enum": "Harpie Support",
+          "display": "Harpie"
+        }
+      ]
+    },
+    {
+      "short": "Bakura",
+      "name": "Bakura Pack",
+      "type": "shop",
+      "id": 3,
+      "archetypes": [
+        {
+          "enum": "Goblin",
+          "display": "Goblin"
+        },
+        {
+          "enum": "Toon",
+          "display": "Toon"
+        },
+        {
+          "enum": "Parshath",
+          "display": "Parshath"
+        },
+        {
+          "enum": "Agent",
+          "display": "Agent"
+        },
+        {
+          "enum": "Destiny Board",
+          "display": "Destiny Board"
+        },
+        {
+          "enum": "Eyes Restrict",
+          "display": "Eyes Restrict"
+        }
+      ]
+    },
+    {
+      "short": "Joey Wheeler",
+      "name": "Joey Wheeler Pack",
+      "type": "shop",
+      "id": 4,
+      "archetypes": [
+        {
+          "enum": "RedEyes",
+          "display": "Red-Eyes"
+        },
+        {
+          "enum": "Jinzo",
+          "display": "Jinzo"
+        }
+      ]
+    },
+    {
+      "short": "Seto Kaiba",
+      "name": "Seto Kaiba Pack",
+      "type": "shop",
+      "id": 5,
+      "archetypes": [
+        {
+          "enum": "Houkai",
+          "display": "Cubic"
+        },
+        {
+          "enum": "BlueEyes",
+          "display": "Blue-Eyes"
+        },
+        {
+          "enum": "Thunder Dragon",
+          "display": "Thunder Dragon"
+        },
+        {
+          "enum": "Blue-Eyes Support",
+          "display": "Blue-Eyes"
+        },
+        {
+          "enum": "Fairy Tale",
+          "display": "Fairy Tale"
+        },
+        {
+          "enum": "LegendDragon",
+          "display": "LegendDragon"
+        }
+      ]
+    },
+    {
+      "short": "Yugi",
+      "name": "Yugi Pack",
+      "type": "shop",
+      "id": 6,
+      "archetypes": [
+        {
+          "enum": "BlackMagic2",
+          "display": "Dark Magician"
+        },
+        {
+          "enum": "BlackMagic",
+          "display": "Dark Magic"
+        },
+        {
+          "enum": "Kuriboh",
+          "display": "Kuriboh"
+        },
+        {
+          "enum": "Gadget",
+          "display": "Gadget"
+        },
+        {
+          "enum": "BusterSword",
+          "display": "Destruction Swordsman"
+        },
+        {
+          "enum": "Sphinx",
+          "display": "Sphinx"
+        },
+        {
+          "enum": "MagnetWarrior",
+          "display": "Magnet Warrior"
+        },
+        {
+          "enum": "MagicianGirl",
+          "display": "Magician Girl"
+        },
+        {
+          "enum": "Chaos",
+          "display": "Chaos"
+        },
+        {
+          "enum": "ChaosSoldier",
+          "display": "Black Luster"
+        },
+        {
+          "enum": "Gaia",
+          "display": "Gaia"
+        },
+        {
+          "enum": "BusterBlader",
+          "display": "Buster Blader"
+        },
+        {
+          "enum": "SilentSword",
+          "display": "Silent Swordsman"
+        },
+        {
+          "enum": "LegendKnight",
+          "display": "Legendary Knight"
+        },
+        {
+          "enum": "BMG",
+          "display": "Dark Magician Girl"
+        },
+        {
+          "enum": "ElfSwordsman",
+          "display": "Celtic Guard"
+        },
+        {
+          "enum": "SilentMagic",
+          "display": "Silent Magician"
+        },
+        {
+          "enum": "Gandora",
+          "display": "Gandora"
+        },
+        {
+          "enum": "Spiral Spear",
+          "display": "Spiral Spear"
+        }
+      ]
+    },
+    {
+      "short": "Alexis Rhodes",
+      "name": "Alexis Rhodes Pack",
+      "type": "shop",
+      "id": 7,
+      "archetypes": [
+        {
+          "enum": "Archfiend",
+          "display": "Archfiend"
+        },
+        {
+          "enum": "Necroth",
+          "display": "Nekroz"
+        },
+        {
+          "enum": "Scorpion",
+          "display": "Dark Scorpion"
+        },
+        {
+          "enum": "CyberAngel",
+          "display": "Cyber Angel"
+        },
+        {
+          "enum": "Forbidden Items",
+          "display": "Forbidden Items"
+        }
+      ]
+    },
+    {
+      "short": "Bastion",
+      "name": "Bastion Misawa Pack",
+      "type": "shop",
+      "id": 8,
+      "archetypes": [
+        {
+          "enum": "Vampire",
+          "display": "Vampire"
+        },
+        {
+          "enum": "Dark World",
+          "display": "Dark World"
+        },
+        {
+          "enum": "Frog",
+          "display": "Frog"
+        },
+        {
+          "enum": "BES",
+          "display": "B.E.S. Big Core"
+        },
+        {
+          "enum": "Element Saber",
+          "display": "Elementsaber"
+        },
+        {
+          "enum": "Elemental Lord",
+          "display": "Elemental Lord"
+        },
+        {
+          "enum": "Bonding",
+          "display": "Bonding"
+        },
+        {
+          "enum": "Beast King",
+          "display": "King Barbaros"
+        }
+      ]
+    },
+    {
+      "short": "Chazz Princeton",
+      "name": "Chazz Princeton Pack",
+      "type": "shop",
+      "id": 9,
+      "archetypes": [
+        {
+          "enum": "Level",
+          "display": "Level"
+        },
+        {
+          "enum": "Ojama",
+          "display": "Ojama"
+        },
+        {
+          "enum": "Prank-Kids",
+          "display": "Prank-Kids"
+        },
+        {
+          "enum": "Arcana",
+          "display": "Arcana Force"
+        },
+        {
+          "enum": "Armed Dragon",
+          "display": "Armed Dragon"
+        },
+        {
+          "enum": "Allure",
+          "display": "Allure Queen"
+        },
+        {
+          "enum": "Clear",
+          "display": "Clear"
+        }
+      ]
+    },
+    {
+      "short": "Syrus Truesdale",
+      "name": "Syrus Truesdale Pack",
+      "type": "shop",
+      "id": 10,
+      "archetypes": [
+        {
+          "enum": "Roid",
+          "display": "Roid"
+        },
+        {
+          "enum": "FallenAngel",
+          "display": "Darklord"
+        },
+        {
+          "enum": "Spirit_All",
+          "display": "Ritual Beast"
+        },
+        {
+          "enum": "Cybernetic",
+          "display": "Cybernetic"
+        },
+        {
+          "enum": "CyberDragon",
+          "display": "Cyber Dragon"
+        },
+        {
+          "enum": "Volcanic",
+          "display": "Volcanic"
+        },
+        {
+          "enum": "Cyberdark",
+          "display": "Cyberdark"
+        },
+        {
+          "enum": "Cloudian",
+          "display": "Cloudian"
+        },
+        {
+          "enum": "Spirit_Tamer",
+          "display": "Ritual Beast Tamer"
+        },
+        {
+          "enum": "Spirit_Beast",
+          "display": "Spiritual Beast"
+        },
+        {
+          "enum": "Spirit_Rider",
+          "display": "Ritual Beast Ulti"
+        },
+        {
+          "enum": "Vehicloid",
+          "display": "Vehicroid"
+        },
+        {
+          "enum": "Cyber Fusion",
+          "display": "Chimeratech"
+        },
+        {
+          "enum": "Blaze",
+          "display": "Blaze Accelerator"
+        }
+      ]
+    },
+    {
+      "short": "Jesse Anderson",
+      "name": "Jesse Anderson Pack",
+      "type": "shop",
+      "id": 11,
+      "archetypes": [
+        {
+          "enum": "Worm",
+          "display": "Worm"
+        },
+        {
+          "enum": "Koakimail",
+          "display": "Koa'ki Meiru"
+        },
+        {
+          "enum": "Shadoll",
+          "display": "Shaddoll"
+        },
+        {
+          "enum": "Venom",
+          "display": "Venom"
+        },
+        {
+          "enum": "Crystal",
+          "display": "Crystal"
+        },
+        {
+          "enum": "Charmer",
+          "display": "Charmer"
+        },
+        {
+          "enum": "Crystal Beast",
+          "display": "Crystal Beast"
+        },
+        {
+          "enum": "Rainbow",
+          "display": "Rainbow"
+        }
+      ]
+    },
+    {
+      "short": "Jaden Yuki",
+      "name": "Jaden Yuki Pack",
+      "type": "shop",
+      "id": 12,
+      "archetypes": [
+        {
+          "enum": "NeosNHERO",
+          "display": "Hero"
+        },
+        {
+          "enum": "Hero",
+          "display": "Hero"
+        },
+        {
+          "enum": "Elemental Hero",
+          "display": "Elemental Hero"
+        },
+        {
+          "enum": "Neos",
+          "display": "Neos"
+        },
+        {
+          "enum": "Destiny Hero",
+          "display": "Destiny Hero"
+        },
+        {
+          "enum": "NeosMaterial",
+          "display": "Neos"
+        },
+        {
+          "enum": "NeosFusion",
+          "display": "Neos"
+        },
+        {
+          "enum": "Evil Hero",
+          "display": "Evil Hero"
+        },
+        {
+          "enum": "Evil Hero Support",
+          "display": "Evil Hero"
+        },
+        {
+          "enum": "Neos Support",
+          "display": "Neos"
+        },
+        {
+          "enum": "MHERO",
+          "display": "Masked HERO"
+        },
+        {
+          "enum": "Neo-Spacian",
+          "display": "Neo-Spacian"
+        },
+        {
+          "enum": "Lord of Phantoms",
+          "display": "Lord of Phantoms"
+        },
+        {
+          "enum": "Cocoon",
+          "display": "Chrysalis"
+        },
+        {
+          "enum": "Change",
+          "display": "Mask Change"
+        },
+        {
+          "enum": "WingedKuriboh",
+          "display": "Winged Kuriboh"
+        },
+        {
+          "enum": "Skyscraper",
+          "display": "Skyscraper"
+        }
+      ]
+    },
+    {
+      "short": "Tetsu Trudge",
+      "name": "Tetsu Trudge Pack",
+      "type": "shop",
+      "id": 13,
+      "archetypes": [
+        {
+          "enum": "Six Samurai",
+          "display": "Six Samurai"
+        },
+        {
+          "enum": "Ice Barrier",
+          "display": "Ice Barrier"
+        },
+        {
+          "enum": "Karakuri",
+          "display": "Karakuri"
+        },
+        {
+          "enum": "F.A.",
+          "display": "F.A."
+        },
+        {
+          "enum": "Alien",
+          "display": "Alien"
+        },
+        {
+          "enum": "Spyral",
+          "display": "SPYRAL"
+        },
+        {
+          "enum": "UA",
+          "display": "U.A."
+        },
+        {
+          "enum": "Shien",
+          "display": "Shien"
+        },
+        {
+          "enum": "Secret Six",
+          "display": "Six Samurai"
+        },
+        {
+          "enum": "Shien Support",
+          "display": "Shien"
+        },
+        {
+          "enum": "Chain",
+          "display": "Iron Chain"
+        },
+        {
+          "enum": "SpyralGear",
+          "display": "SPYRAL"
+        },
+        {
+          "enum": "SpyralBackRow",
+          "display": "SPYRAL"
+        }
+      ]
+    },
+    {
+      "short": "Leo/Luna",
+      "name": "Leo & Luna Pack",
+      "type": "shop",
+      "id": 14,
+      "archetypes": [
+        {
+          "enum": "Genex",
+          "display": "Genex"
+        },
+        {
+          "enum": "Deformer",
+          "display": "Morphtronic"
+        },
+        {
+          "enum": "Dragnity",
+          "display": "Dragunity"
+        },
+        {
+          "enum": "Vailon",
+          "display": "Vylon"
+        },
+        {
+          "enum": "Jurac",
+          "display": "Jurrac"
+        },
+        {
+          "enum": "Machina",
+          "display": "Machina"
+        },
+        {
+          "enum": "RealGenex",
+          "display": "R-Genex"
+        },
+        {
+          "enum": "Phantasm Spiral",
+          "display": "Phantasm Spiral"
+        },
+        {
+          "enum": "SoundWarrior",
+          "display": "Symphonic Warrior"
+        },
+        {
+          "enum": "PowerTool",
+          "display": "Power Tool"
+        }
+      ]
+    },
+    {
+      "short": "Akiza Izinski",
+      "name": "Akiza Izinski Pack",
+      "type": "shop",
+      "id": 15,
+      "archetypes": [
+        {
+          "enum": "Lightsworn",
+          "display": "Lightsworn"
+        },
+        {
+          "enum": "Gusta",
+          "display": "Gusto"
+        },
+        {
+          "enum": "Reptiles",
+          "display": "Reptilianne"
+        },
+        {
+          "enum": "Aroma",
+          "display": "Aroma"
+        },
+        {
+          "enum": "TimeGod",
+          "display": "Timelord"
+        },
+        {
+          "enum": "Rose Dragon",
+          "display": "Rose Dragon"
+        },
+        {
+          "enum": "Rose Support",
+          "display": "Rose Dragon"
+        }
+      ]
+    },
+    {
+      "short": "Jack Atlas",
+      "name": "Jack Atlas Pack",
+      "type": "shop",
+      "id": 16,
+      "archetypes": [
+        {
+          "enum": "Eleki",
+          "display": "Watt"
+        },
+        {
+          "enum": "Ally of Justice",
+          "display": "Ally of Justice"
+        },
+        {
+          "enum": "Infernity",
+          "display": "Infernity"
+        },
+        {
+          "enum": "Flamebell",
+          "display": "Flamvell"
+        },
+        {
+          "enum": "DragonStar",
+          "display": "Yang Zing"
+        },
+        {
+          "enum": "Mayakashi",
+          "display": "Mayakashi"
+        },
+        {
+          "enum": "Resonator",
+          "display": "Red Dragon Archfiend"
+        },
+        {
+          "enum": "Battery",
+          "display": "Batteryman"
+        },
+        {
+          "enum": "FortuneLady",
+          "display": "Fortune Lady"
+        },
+        {
+          "enum": "RedDemon",
+          "display": "Red Dragon Archfiend"
+        },
+        {
+          "enum": "Saviour",
+          "display": "Majestic"
+        }
+      ]
+    },
+    {
+      "short": "Crow",
+      "name": "Crow Pack",
+      "type": "shop",
+      "id": 17,
+      "archetypes": [
+        {
+          "enum": "BlackFeather",
+          "display": "Blackwing"
+        },
+        {
+          "enum": "Natul",
+          "display": "Naturia"
+        },
+        {
+          "enum": "Roaring",
+          "display": "Fabled"
+        },
+        {
+          "enum": "Polestar",
+          "display": "Nordic"
+        },
+        {
+          "enum": "Laval",
+          "display": "Laval"
+        },
+        {
+          "enum": "MistValley",
+          "display": "Mist Valley"
+        },
+        {
+          "enum": "ABF",
+          "display": "Blackwing"
+        },
+        {
+          "enum": "Reactor",
+          "display": "Reactor"
+        },
+        {
+          "enum": "PolestarBeast",
+          "display": "Nordic"
+        },
+        {
+          "enum": "PolestarGhost",
+          "display": "Nordic"
+        },
+        {
+          "enum": "PolestarItem",
+          "display": "Nordic"
+        },
+        {
+          "enum": "PolestarAngel",
+          "display": "Nordic"
+        },
+        {
+          "enum": "PoleGod",
+          "display": "Nordic"
+        }
+      ]
+    },
+    {
+      "short": "Yusei Fudo",
+      "name": "Yusei Fudo Pack",
+      "type": "shop",
+      "id": 18,
+      "archetypes": [
+        {
+          "enum": "Warrior",
+          "display": "Warrior"
+        },
+        {
+          "enum": "Synchron",
+          "display": "Synchron"
+        },
+        {
+          "enum": "Junk",
+          "display": "Junk"
+        },
+        {
+          "enum": "TG",
+          "display": "T.G."
+        },
+        {
+          "enum": "Assault",
+          "display": "Assault"
+        },
+        {
+          "enum": "Stardust",
+          "display": "Stardust"
+        },
+        {
+          "enum": "Sin",
+          "display": "Malefic"
+        },
+        {
+          "enum": "Meklord",
+          "display": "Meklord"
+        },
+        {
+          "enum": "EarthbindGod",
+          "display": "Earthbound Immortal"
+        },
+        {
+          "enum": "SlashBuster",
+          "display": "Assault"
+        },
+        {
+          "enum": "Wisel",
+          "display": "Meklord"
+        },
+        {
+          "enum": "Infinity",
+          "display": "Meklord"
+        },
+        {
+          "enum": "Meklord_Emp",
+          "display": "Meklord"
+        },
+        {
+          "enum": "Meklord_Sld",
+          "display": "Meklord"
+        },
+        {
+          "enum": "Nitro",
+          "display": "Nitro"
+        }
+      ]
+    },
+    {
+      "short": "Cathy Katherine",
+      "name": "Cathy Katherine Pack",
+      "type": "shop",
+      "id": 19,
+      "archetypes": [
+        {
+          "enum": "Bujin",
+          "display": "Bujingi"
+        },
+        {
+          "enum": "Ghostrick",
+          "display": "Ghostrick"
+        },
+        {
+          "enum": "Madolce",
+          "display": "Madolche"
+        },
+        {
+          "enum": "Chichukai",
+          "display": "Subterror"
+        },
+        {
+          "enum": "Duston",
+          "display": "Duston"
+        },
+        {
+          "enum": "Haze",
+          "display": "Hazy Flame"
+        },
+        {
+          "enum": "ChichukaiRyu",
+          "display": "Subterror"
+        },
+        {
+          "enum": "Evold",
+          "display": "Evoltile"
+        },
+        {
+          "enum": "Fire King",
+          "display": "Fire King"
+        },
+        {
+          "enum": "FireDance",
+          "display": "Fire Formation"
+        },
+        {
+          "enum": "HazeBeast",
+          "display": "Hazy Flame"
+        },
+        {
+          "enum": "FireStar",
+          "display": "Fire Fist"
+        },
+        {
+          "enum": "Evolder",
+          "display": "Evolsaur"
+        },
+        {
+          "enum": "FireKingBeast",
+          "display": "Fire King Avatar"
+        },
+        {
+          "enum": "Evolkaiser",
+          "display": "Evolzar"
+        },
+        {
+          "enum": "Evolution Pill",
+          "display": "Evolution Pill"
+        },
+        {
+          "enum": "Tomabo",
+          "display": "Inmato"
+        }
+      ]
+    },
+    {
+      "short": "Quinton",
+      "name": "Quinton Pack",
+      "type": "shop",
+      "id": 20,
+      "archetypes": [
+        {
+          "enum": "Mythical",
+          "display": "Beasts"
+        },
+        {
+          "enum": "Ooparts",
+          "display": "Chronomaly"
+        },
+        {
+          "enum": "Noble Knight",
+          "display": "Noble Knight"
+        },
+        {
+          "enum": "Zenmai",
+          "display": "Wind-Up"
+        },
+        {
+          "enum": "GimmickPuppet",
+          "display": "Gimmick Puppet"
+        },
+        {
+          "enum": "PhantomMek",
+          "display": "Mecha Phantom Beast"
+        },
+        {
+          "enum": "Heroic",
+          "display": "Heroic"
+        },
+        {
+          "enum": "Artifact",
+          "display": "Artifact"
+        },
+        {
+          "enum": "HolySword",
+          "display": "Noble Arms"
+        },
+        {
+          "enum": "H_Challenger",
+          "display": "Heroic Challenger"
+        },
+        {
+          "enum": "ChaosXyz",
+          "display": "CXyz"
+        },
+        {
+          "enum": "Bamboo Sword",
+          "display": "Bamboo Sword"
+        },
+        {
+          "enum": "Malicebolus",
+          "display": "Malicevorous"
+        },
+        {
+          "enum": "Artorius",
+          "display": "Noble Knight"
+        },
+        {
+          "enum": "Lancelot",
+          "display": "Ignoble Knight"
+        }
+      ]
+    },
+    {
+      "short": "Kite Tenjo",
+      "name": "Kite Tenjo Pack",
+      "type": "shop",
+      "id": 21,
+      "archetypes": [
+        {
+          "enum": "Galaxy Photon",
+          "display": "Galaxy Photon"
+        },
+        {
+          "enum": "Photon",
+          "display": "Photon"
+        },
+        {
+          "enum": "Galaxy",
+          "display": "Galaxy"
+        },
+        {
+          "enum": "Velds",
+          "display": "Evilswarm"
+        },
+        {
+          "enum": "Inzector",
+          "display": "Inzektor"
+        },
+        {
+          "enum": "HolySeal",
+          "display": "Hieratic"
+        },
+        {
+          "enum": "Invelds",
+          "display": "Steelswarm"
+        },
+        {
+          "enum": "Over100",
+          "display": "Over 100"
+        },
+        {
+          "enum": "GalaxyEyes",
+          "display": "Galaxy-Eyes"
+        },
+        {
+          "enum": "Cypher",
+          "display": "Cipher"
+        },
+        {
+          "enum": "Medallion",
+          "display": "Heraldic Beast"
+        },
+        {
+          "enum": "Invasion",
+          "display": "Infestation"
+        },
+        {
+          "enum": "HolyLightning",
+          "display": "Star Seraph"
+        },
+        {
+          "enum": "Umbral",
+          "display": "Umbral Horror"
+        },
+        {
+          "enum": "Medallion2",
+          "display": "Heraldry"
+        },
+        {
+          "enum": "Bouncer",
+          "display": "Bounzer"
+        },
+        {
+          "enum": "SDRobo2",
+          "display": "Super Defense Robot"
+        },
+        {
+          "enum": "Butterfly",
+          "display": "Butterspy"
+        },
+        {
+          "enum": "SDRobo",
+          "display": "Super Defense Robot"
+        },
+        {
+          "enum": "Tachyon",
+          "display": "Galaxy-Eyes Tachyon Dragon"
+        }
+      ]
+    },
+    {
+      "short": "Shark",
+      "name": "Shark Pack",
+      "type": "shop",
+      "id": 22,
+      "archetypes": [
+        {
+          "enum": "Ritua",
+          "display": "Gishki"
+        },
+        {
+          "enum": "Mermail",
+          "display": "Mermail"
+        },
+        {
+          "enum": "BK",
+          "display": "Battlin' Boxer"
+        },
+        {
+          "enum": "Weather",
+          "display": "The Weather Painter"
+        },
+        {
+          "enum": "Penguin",
+          "display": "Penguin"
+        },
+        {
+          "enum": "Poseidon",
+          "display": "Atlantean"
+        },
+        {
+          "enum": "Abyss",
+          "display": "Abyss"
+        },
+        {
+          "enum": "Nimble",
+          "display": "Nimble"
+        },
+        {
+          "enum": "Fishborg",
+          "display": "Fishborg"
+        }
+      ]
+    },
+    {
+      "short": "Yuma Tsukumo",
+      "name": "Yuma Tsukumo Pack",
+      "type": "shop",
+      "id": 23,
+      "archetypes": [
+        {
+          "enum": "Numbers",
+          "display": "Number"
+        },
+        {
+          "enum": "Xyz",
+          "display": "Xyz"
+        },
+        {
+          "enum": "Gagaga",
+          "display": "Onomat"
+        },
+        {
+          "enum": "ChaosNumbers",
+          "display": "Chaos Number"
+        },
+        {
+          "enum": "Spellbook",
+          "display": "Spellbook"
+        },
+        {
+          "enum": "HopeX",
+          "display": "Utopia"
+        },
+        {
+          "enum": "Gogogo",
+          "display": "Onomat"
+        },
+        {
+          "enum": "ZexalWeapon",
+          "display": "ZW"
+        },
+        {
+          "enum": "Hope",
+          "display": "Utopia"
+        },
+        {
+          "enum": "Dododo",
+          "display": "Onomat"
+        },
+        {
+          "enum": "Majin",
+          "display": "Djinn"
+        },
+        {
+          "enum": "Magical",
+          "display": "Prophecy"
+        },
+        {
+          "enum": "Zubaba",
+          "display": "Onomat"
+        },
+        {
+          "enum": "Onomat",
+          "display": "Onomat"
+        },
+        {
+          "enum": "CNo39",
+          "display": "Utopia"
+        },
+        {
+          "enum": "Utopic Future",
+          "display": "Utopia"
+        }
+      ]
+    },
+    {
+      "short": "Gong Strong",
+      "name": "Gong Strong Pack",
+      "type": "shop",
+      "id": 25,
+      "archetypes": [
+        {
+          "enum": "Saber",
+          "display": "Saber"
+        },
+        {
+          "enum": "Superheavy",
+          "display": "Superheavy Samurai"
+        },
+        {
+          "enum": "Scrap",
+          "display": "Scrap"
+        },
+        {
+          "enum": "SR",
+          "display": "Speedroid"
+        },
+        {
+          "enum": "X_Saber",
+          "display": "X-Saber"
+        },
+        {
+          "enum": "Shiranui",
+          "display": "Shiranui"
+        },
+        {
+          "enum": "Cardian",
+          "display": "Flower Cardian"
+        },
+        {
+          "enum": "Crystron",
+          "display": "Crystron"
+        },
+        {
+          "enum": "Fur Hire",
+          "display": "Fur Hire"
+        },
+        {
+          "enum": "PSYFrame",
+          "display": "PSYFrame"
+        },
+        {
+          "enum": "Bunborg",
+          "display": "Deskbot"
+        },
+        {
+          "enum": "Gradle",
+          "display": "Graydle"
+        },
+        {
+          "enum": "SuperheavySamSoul",
+          "display": "Superheavy Samurai"
+        },
+        {
+          "enum": "Tramid",
+          "display": "Triamid"
+        },
+        {
+          "enum": "FortunePrince",
+          "display": "Prediction Princess"
+        },
+        {
+          "enum": "WW",
+          "display": "Windwitch"
+        },
+        {
+          "enum": "Gottoms",
+          "display": "Gottoms"
+        },
+        {
+          "enum": "ClearWing",
+          "display": "Wing Synchro Dragon"
+        }
+      ]
+    },
+    {
+      "short": "Zuzu Boyle",
+      "name": "Zuzu Boyle Pack",
+      "type": "shop",
+      "id": 26,
+      "archetypes": [
+        {
+          "enum": "Fusion",
+          "display": "Fusion"
+        },
+        {
+          "enum": "Glad Beasts",
+          "display": "Gladiator Beast"
+        },
+        {
+          "enum": "Ancient Gear",
+          "display": "Ancient Gear"
+        },
+        {
+          "enum": "Gem",
+          "display": "Gem"
+        },
+        {
+          "enum": "GemKnight",
+          "display": "Gem-Knight"
+        },
+        {
+          "enum": "Predaplants",
+          "display": "Predaplant"
+        },
+        {
+          "enum": "Deathtoy",
+          "display": "Frightfur"
+        },
+        {
+          "enum": "Moonlight",
+          "display": "Lunalight"
+        },
+        {
+          "enum": "Predaplants2",
+          "display": "Predaplant"
+        },
+        {
+          "enum": "Genso",
+          "display": "Melodius Diva"
+        },
+        {
+          "enum": "Metalphose",
+          "display": "Metalfoes"
+        },
+        {
+          "enum": "Furnimal",
+          "display": "Fluffal"
+        },
+        {
+          "enum": "Infernoid",
+          "display": "Infernoid"
+        },
+        {
+          "enum": "Void",
+          "display": "Void"
+        },
+        {
+          "enum": "Possessed",
+          "display": "Charmer"
+        },
+        {
+          "enum": "Invoked",
+          "display": "Invoked"
+        },
+        {
+          "enum": "EdgeImp",
+          "display": "Edge Imp"
+        },
+        {
+          "enum": "Glad Beast Weapon",
+          "display": "Gladiator Beast"
+        },
+        {
+          "enum": "GensoPrincess",
+          "display": "Melodious Maestra"
+        },
+        {
+          "enum": "Aquaactress",
+          "display": "Aquaactress"
+        },
+        {
+          "enum": "Aquarium",
+          "display": "Aquarium"
+        },
+        {
+          "enum": "Venom2",
+          "display": "Venom"
+        },
+        {
+          "enum": "Spell Gear",
+          "display": "Gear"
+        },
+        {
+          "enum": "Venom3",
+          "display": "Venom"
+        }
+      ]
+    },
+    {
+      "short": "Shay",
+      "name": "Shay Pack",
+      "type": "shop",
+      "id": 27,
+      "archetypes": [
+        {
+          "enum": "Ninja",
+          "display": "Ninja"
+        },
+        {
+          "enum": "RR",
+          "display": "Raid Raptor"
+        },
+        {
+          "enum": "Sacred",
+          "display": "Constellar"
+        },
+        {
+          "enum": "Tellarknight",
+          "display": "Satellarknight"
+        },
+        {
+          "enum": "Hole",
+          "display": "Hole"
+        },
+        {
+          "enum": "Shinra",
+          "display": "Sylvan"
+        },
+        {
+          "enum": "Higan",
+          "display": "Burning Abyss"
+        },
+        {
+          "enum": "TrapHole",
+          "display": "Trap Hole"
+        },
+        {
+          "enum": "RUM",
+          "display": "Rank-Up-Magic"
+        },
+        {
+          "enum": "PhantomKnight",
+          "display": "Phantom Knights"
+        },
+        {
+          "enum": "Super",
+          "display": "Super Quant"
+        },
+        {
+          "enum": "Beast12",
+          "display": "Zoodiac"
+        },
+        {
+          "enum": "Magical Musket",
+          "display": "Magical Musketeer"
+        },
+        {
+          "enum": "Geargear",
+          "display": "Geargia"
+        },
+        {
+          "enum": "Phantom",
+          "display": "Phantom"
+        },
+        {
+          "enum": "Ninjutsu",
+          "display": "Ninjutsu"
+        },
+        {
+          "enum": "Burgestoma",
+          "display": "Paleozoic"
+        },
+        {
+          "enum": "Sky Striker",
+          "display": "Sky Striker"
+        },
+        {
+          "enum": "Sky Striker Ace",
+          "display": "Sky Striker Ace"
+        },
+        {
+          "enum": "Kowakuma",
+          "display": "Traptrix"
+        },
+        {
+          "enum": "Kagoju",
+          "display": "Chemicritter"
+        },
+        {
+          "enum": "Lyrilusc",
+          "display": "Lyrilusc"
+        },
+        {
+          "enum": "Stellarknight",
+          "display": "Stellarknight"
+        },
+        {
+          "enum": "Super_Quantum",
+          "display": "Super Quant"
+        },
+        {
+          "enum": "Super_Machine",
+          "display": "Super Quant"
+        },
+        {
+          "enum": "Skyblaster",
+          "display": "Skyblaster"
+        },
+        {
+          "enum": "Geargearno",
+          "display": "Geargiano"
+        },
+        {
+          "enum": "DarkXYZDragon",
+          "display": "Xyz Dragon"
+        },
+        {
+          "enum": "Sprout",
+          "display": "Sylvan"
+        },
+        {
+          "enum": "Dante",
+          "display": "Dante"
+        }
+      ]
+    },
+    {
+      "short": "Declan Akaba",
+      "name": "Declan Akaba Pack",
+      "type": "shop",
+      "id": 28,
+      "archetypes": [
+        {
+          "enum": "DD",
+          "display": "D/D"
+        },
+        {
+          "enum": "DDD",
+          "display": "D/D/D"
+        },
+        {
+          "enum": "SOz",
+          "display": "Kozmo"
+        },
+        {
+          "enum": "Yosen",
+          "display": "Yosenju"
+        },
+        {
+          "enum": "Sephira",
+          "display": "Zefra"
+        },
+        {
+          "enum": "Qliphot",
+          "display": "Qliphort"
+        },
+        {
+          "enum": "True Draco",
+          "display": "True Draco"
+        },
+        {
+          "enum": "Monarch",
+          "display": "Monarchs"
+        },
+        {
+          "enum": "Igknight",
+          "display": "Igknight"
+        },
+        {
+          "enum": "Majespecter",
+          "display": "Majespecter"
+        },
+        {
+          "enum": "Kaiju",
+          "display": "Kaiju"
+        },
+        {
+          "enum": "Dynamist",
+          "display": "Dinomist"
+        },
+        {
+          "enum": "Amorphage",
+          "display": "Amorphage"
+        },
+        {
+          "enum": "Contract",
+          "display": "Contract"
+        },
+        {
+          "enum": "MakaiGekidan",
+          "display": "Abyss Actors"
+        },
+        {
+          "enum": "Mythical Beast",
+          "display": "Mythical Beast"
+        },
+        {
+          "enum": "Cthulhu",
+          "display": "Entity"
+        },
+        {
+          "enum": "Dragonsword",
+          "display": "Dracoslayer"
+        },
+        {
+          "enum": "MakaiDaihon",
+          "display": "Abyss Actors"
+        },
+        {
+          "enum": "Dragondevil",
+          "display": "Dracoslayer"
+        },
+        {
+          "enum": "ApoQliphot",
+          "display": "Apoqliphort"
+        }
+      ]
+    },
+    {
+      "short": "Yuya Sakaki",
+      "name": "Yuya Sakaki Pack",
+      "type": "shop",
+      "id": 29,
+      "archetypes": [
+        {
+          "enum": "EM",
+          "display": "Performapal"
+        },
+        {
+          "enum": "Pendulum",
+          "display": "Pendulum"
+        },
+        {
+          "enum": "OddEyes",
+          "display": "Odd-Eyes"
+        },
+        {
+          "enum": "Wizard",
+          "display": "Magician"
+        },
+        {
+          "enum": "Nephthys",
+          "display": "Nephthys"
+        },
+        {
+          "enum": "Metaphys",
+          "display": "Metaphys"
+        },
+        {
+          "enum": "Em",
+          "display": "Performage"
+        },
+        {
+          "enum": "Empowered",
+          "display": "Empowered Warrior"
+        },
+        {
+          "enum": "PendDragon",
+          "display": "Pendulum Dragon"
+        },
+        {
+          "enum": "Supreme King Dragon",
+          "display": "Supreme King Dragon"
+        },
+        {
+          "enum": "Magician",
+          "display": "Magician"
+        },
+        {
+          "enum": "Rebellion Dragon",
+          "display": "Dark Rebellion"
+        },
+        {
+          "enum": "AetherWeapon",
+          "display": "Empowering Dragon"
+        },
+        {
+          "enum": "PendulumGraph",
+          "display": "Pendulumgraph"
+        },
+        {
+          "enum": "Supreme King",
+          "display": "Supreme King Gate"
+        },
+        {
+          "enum": "Potan",
+          "display": "Potan"
+        }
+      ]
+    },
+    {
+      "short": "Playmaker",
+      "name": "Playmaker Pack",
+      "type": "shop",
+      "id": 30,
+      "archetypes": [
+        {
+          "enum": "World Legacy",
+          "display": "World Legacy"
+        },
+        {
+          "enum": "Trickstar",
+          "display": "Trickstar"
+        },
+        {
+          "enum": "Gouki",
+          "display": "Gouki"
+        },
+        {
+          "enum": "Vendread",
+          "display": "Vendread"
+        },
+        {
+          "enum": "Altergeist",
+          "display": "Altergeist"
+        },
+        {
+          "enum": "Crusadia",
+          "display": "Crusadia"
+        },
+        {
+          "enum": "Orcust",
+          "display": "Orcust"
+        },
+        {
+          "enum": "Cynet",
+          "display": "Cynet"
+        },
+        {
+          "enum": "World Chalice",
+          "display": "World Chalice"
+        },
+        {
+          "enum": "Krawler",
+          "display": "Krawler"
+        },
+        {
+          "enum": "Mekk-Knight",
+          "display": "Mekk-Knight"
+        },
+        {
+          "enum": "Borrel",
+          "display": "Borrel"
+        },
+        {
+          "enum": "Rokket Dragon",
+          "display": "Rokket Dragon"
+        },
+        {
+          "enum": "Code Talker",
+          "display": "Code Talker"
+        },
+        {
+          "enum": "Tindangle",
+          "display": "Tindangle"
+        },
+        {
+          "enum": "Knightmare",
+          "display": "Knightmare"
+        }
+      ]
+    },
+    {
+      "short": "Blue Angel",
+      "name": "Blue Angel Pack",
+      "type": "dlc",
+      "id": 2,
+      "archetypes": [
+        {
+          "enum": "Marincess",
+          "display": "Marincess"
+        },
+        {
+          "enum": "Tenyi",
+          "display": "Tenyi"
+        },
+        {
+          "enum": "Simorgh",
+          "display": "Simorgh"
+        },
+        {
+          "enum": "Valkyrie",
+          "display": "Valkyrie"
+        },
+        {
+          "enum": "Endymion",
+          "display": "Endymion"
+        },
+        {
+          "enum": "Megalith",
+          "display": "Megalith"
+        },
+        {
+          "enum": "Palladium Oracle",
+          "display": "Palladium Oracle"
+        }
+      ]
+    },
+    {
+      "short": "Soulburner",
+      "name": "Soulburner Pack",
+      "type": "dlc",
+      "id": 3,
+      "archetypes": [
+        {
+          "enum": "Salamangreat",
+          "display": "Salamangreat"
+        },
+        {
+          "enum": "Dinowrestler",
+          "display": "Dinowrestler"
+        },
+        {
+          "enum": "VHERO",
+          "display": "Vision HERO"
+        },
+        {
+          "enum": "Battlewasp",
+          "display": "Battlewasp"
+        },
+        {
+          "enum": "Machine Angel",
+          "display": "Machine Angel"
+        },
+        {
+          "enum": "Smile",
+          "display": "Smile"
+        },
+        {
+          "enum": "Clear Wing 2",
+          "display": "Clear Wing"
+        }
+      ]
+    },
+    {
+      "short": "Varis",
+      "name": "Varis Pack",
+      "type": "dlc",
+      "id": 4,
+      "archetypes": [
+        {
+          "enum": "Impcantation",
+          "display": "Impcantation"
+        },
+        {
+          "enum": "FortuneWitch",
+          "display": "Fortune Fairy"
+        },
+        {
+          "enum": "Shiranui Sword",
+          "display": "Shiranui Spectralsword"
+        },
+        {
+          "enum": "Chaos Phantom",
+          "display": "Chaos Phantom"
+        }
+      ]
+    },
+    {
+      "short": "Ai",
+      "name": "Ai Pack",
+      "type": "dlc",
+      "id": 5,
+      "archetypes": [
+        {
+          "enum": "Danger",
+          "display": "Danger!"
+        },
+        {
+          "enum": "Witchcrafter",
+          "display": "Witchcrafter"
+        },
+        {
+          "enum": "Evil Eye",
+          "display": "Evil Eye"
+        },
+        {
+          "enum": "Generaider",
+          "display": "Generaider"
+        },
+        {
+          "enum": "Mathmech",
+          "display": "Mathmech"
+        },
+        {
+          "enum": "Dragonmaid",
+          "display": "Dragonmaid"
+        },
+        {
+          "enum": "@Ignister",
+          "display": "@Ignister"
+        },
+        {
+          "enum": "Infinitrack",
+          "display": "Infinitrack"
+        },
+        {
+          "enum": "Time Thief",
+          "display": "Time Thief"
+        },
+        {
+          "enum": "Unchained",
+          "display": "Unchained"
+        },
+        {
+          "enum": "Ancient Warriors",
+          "display": "Ancient Warriors"
+        },
+        {
+          "enum": "A.I.",
+          "display": "A.I."
+        },
+        {
+          "enum": "Unchained Soul",
+          "display": "Unchained Soul"
+        }
+      ]
+    }
+  ]
+}

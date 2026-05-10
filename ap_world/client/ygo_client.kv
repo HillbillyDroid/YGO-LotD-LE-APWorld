@@ -1,0 +1,31 @@
+<DuelChip>:
+    size_hint_y: None
+    height: 24
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+    padding: 8, 0
+
+<SeriesPanel>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: self.minimum_height
+    spacing: 2
+    padding: 4
+
+    Label:
+        text: root.title
+        bold: True
+        font_size: "15sp"
+        size_hint_y: None
+        height: 26
+        halign: "left"
+        valign: "middle"
+        text_size: self.size
+
+<YGOLotDView>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: self.minimum_height
+    spacing: 8
+    padding: 8
