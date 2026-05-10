@@ -86,6 +86,29 @@ class YGOLotDManager(GameManager):
         # callback can surface failure messages without tearing down the popup.
         self._cloud_popup: Popup | None = None
         self._cloud_popup_error: Label | None = None
+        # Save-swap modal. Opened on demand by _refresh_impl when
+        # ctx.swap_pending is set (Step 6 sets this from Stage B). Holds a
+        # reference to its status label + polling event so the swap-in-progress
+        # countdown can be torn down cleanly on dismiss.
+        self._swap_popup: Popup | None = None
+        self._swap_popup_status: Label | None = None
+        self._swap_popup_swap_btn: Button | None = None
+        self._swap_poll_event: object | None = None
+        # Saves tab. Re-rendered each tick (list_worlds is a cheap dir-scan
+        # + json reads, fine at 1 Hz with the small N of AP worlds a player
+        # accumulates).
+        self._saves_status_label: Label | None = None
+        self._saves_table_view: YGOLotDView | None = None
+        # Restore-confirmation modal (used by both "Restore" row buttons and
+        # "Restore pre-AP save"). Same close-game polling shape as the swap
+        # modal but with separate state so the two can never collide.
+        self._restore_popup: Popup | None = None
+        self._restore_popup_status: Label | None = None
+        self._restore_popup_action_btn: Button | None = None
+        self._restore_poll_event: object | None = None
+        # Launch-game button (Status tab). Driven by ctx.launch_required +
+        # ctx.game_must_close — disabled when neither user-actionable.
+        self._launch_button: Button | None = None
         super().__init__(ctx)
 
         if YGOLotDManager._bind_ctx is not None:
@@ -117,6 +140,17 @@ class YGOLotDManager(GameManager):
         self._summary_label.bind(size=self._summary_label.setter("text_size"))
         status_panel.add_widget(self._summary_label)
 
+        # Launch-game button row. Disabled by default; enabled by
+        # _refresh_impl when ctx.launch_required is True. Label updates
+        # to reflect why it's disabled (game running externally, no
+        # connection, already attached, etc.).
+        launch_row = BoxLayout(orientation="horizontal", size_hint_y=None,
+                               height=40, padding=4, spacing=4)
+        self._launch_button = Button(text="Launch game", disabled=True)
+        self._launch_button.bind(on_press=lambda _b: self._on_launch_clicked())
+        launch_row.add_widget(self._launch_button)
+        status_panel.add_widget(launch_row)
+
         scroll = ScrollView(size_hint=(1, 1))
         self._series_view = YGOLotDView()
         scroll.add_widget(self._series_view)
@@ -147,9 +181,38 @@ class YGOLotDManager(GameManager):
 
         self.add_client_tab("Crafting", crafting_panel)
 
+        # --- Saves tab -----------------------------------------------------
+        saves_panel = BoxLayout(orientation="vertical", spacing=4, padding=4)
+
+        self._saves_status_label = Label(
+            text="Save manager not initialized.",
+            size_hint_y=None, height=48,
+            halign="left", valign="top",
+        )
+        self._saves_status_label.bind(size=self._saves_status_label.setter("text_size"))
+        saves_panel.add_widget(self._saves_status_label)
+
+        action_row = BoxLayout(orientation="horizontal", size_hint_y=None,
+                               height=36, spacing=6)
+        restore_pre_ap_btn = Button(text="Restore pre-AP save")
+        restore_pre_ap_btn.bind(on_press=lambda _b: self._on_restore_pre_ap_clicked())
+        open_folder_btn = Button(text="Open backup folder")
+        open_folder_btn.bind(on_press=lambda _b: self._on_open_backup_folder_clicked())
+        action_row.add_widget(restore_pre_ap_btn)
+        action_row.add_widget(open_folder_btn)
+        saves_panel.add_widget(action_row)
+
+        saves_scroll = ScrollView(size_hint=(1, 1))
+        self._saves_table_view = YGOLotDView()
+        saves_scroll.add_widget(self._saves_table_view)
+        saves_panel.add_widget(saves_scroll)
+
+        self.add_client_tab("Saves", saves_panel)
+
         # Initial paint — top-50 placeholder list so the panel isn't blank
         # before the user touches Search.
         Clock.schedule_once(lambda _dt: self._render_crafting_results(), 0)
+        Clock.schedule_once(lambda _dt: self._render_saves_tab(), 0)
 
         return container
 
@@ -182,6 +245,8 @@ class YGOLotDManager(GameManager):
         if self._summary_label is not None:
             self._summary_label.text = self._build_summary_text()
 
+        self._update_launch_button()
+
         self._render_series_panels()
         # Crafting results aren't rebuilt on every tick (full-catalog filter
         # is laggy); only the DP label + button-disabled states refresh here.
@@ -207,6 +272,19 @@ class YGOLotDManager(GameManager):
             self._cloud_popup.dismiss()
             self._cloud_popup = None
             self._cloud_popup_error = None
+
+        # Saves tab — cheap re-render each tick (small N of worlds).
+        self._render_saves_tab()
+
+        # Save-swap gate. Opens the moment Stage A.1 detects a mismatch
+        # (pre-attach, so save_data_ready is False here — the modal is
+        # not gated on it). Tears down once `swap_pending` clears (either
+        # by swap or by the user picking "Skip this session").
+        if (ctx.swap_pending and ctx.swap_world_key
+                and self._swap_popup is None):
+            self._open_swap_popup(ctx.swap_world_key)
+        elif not ctx.swap_pending and self._swap_popup is not None:
+            self._dismiss_swap_popup()
 
     def _build_summary_text(self) -> str:
         ctx = self.ctx
@@ -256,6 +334,42 @@ class YGOLotDManager(GameManager):
             1 for loc in self.ctx.checked_locations
             if lo <= loc <= hi and (loc - lo) % 2 == 0
         )
+
+    def _update_launch_button(self) -> None:
+        """Refresh the Launch button text + enabled state from context flags.
+
+        Enabled iff `ctx.launch_required AND not ctx.game_must_close`. Label
+        explains the disabled reason so the user isn't left guessing why
+        clicking does nothing.
+        """
+        if self._launch_button is None:
+            return
+        ctx = self.ctx
+        if ctx.game_must_close:
+            self._launch_button.text = "Game running — close it first"
+            self._launch_button.disabled = True
+        elif ctx.launch_required:
+            self._launch_button.text = "Launch game"
+            self._launch_button.disabled = False
+        elif ctx.memory.pm is not None:
+            self._launch_button.text = "Game already attached"
+            self._launch_button.disabled = True
+        elif not ctx.slot_data:
+            self._launch_button.text = "Connect to AP server first"
+            self._launch_button.disabled = True
+        else:
+            # Connected, no game running, but no launch_required either —
+            # we're between Stage A bails (e.g. cloud-off pending). Show
+            # neutral text; the modal handles the actionable bit.
+            self._launch_button.text = "Launch game (waiting for setup)"
+            self._launch_button.disabled = True
+
+    def _on_launch_clicked(self) -> None:
+        from CommonClient import logger
+        ok, msg = self.ctx.launch_game()
+        logger.info(msg)
+        # _refresh_impl will retitle the button + flip disabled on the next
+        # tick driven by ctx.launch_required clearing.
 
     def _render_series_panels(self) -> None:
         if self._series_view is None:
@@ -455,6 +569,393 @@ class YGOLotDManager(GameManager):
                 self._cloud_popup_error = None
         elif self._cloud_popup_error is not None:
             self._cloud_popup_error.text = msg
+
+    # ---- save-swap modal -------------------------------------------------
+
+    def _open_swap_popup(self, world_key: str) -> None:
+        """Modal that surfaces a save mismatch detected at Stage B.
+
+        The "Close game and swap" button polls until pymem can no longer
+        attach to the LotD-LE process, then runs `ctx.perform_save_swap()`.
+        "Skip this session" clears the pending flag without touching the
+        save; reconnect re-evaluates."""
+        body = BoxLayout(orientation="vertical", spacing=8, padding=10)
+        instructions = Label(
+            text=(
+                f"[b]Save mismatch detected for AP world [color=ffcc88]{world_key}[/color].[/b]\n\n"
+                "The savegame.dat in your Steam userdata does not match the "
+                "backup tracked for this AP world. Click [b]Swap[/b] to:\n\n"
+                "  1. Capture the current userdata save (into its matching "
+                "backup if recognized, otherwise to a timestamped orphan dir).\n"
+                "  2. Replace it with this world's tracked save.\n"
+                "  3. Click Launch on the Status tab to start the game.\n\n"
+                "Or click [b]Skip this session[/b] to leave the file alone "
+                "(your AP state will not match what's loaded in-game).\n\n"
+                "(If the game is currently running, the Swap button will wait "
+                "for you to close it first.)"
+            ),
+            markup=True, halign="left", valign="top",
+        )
+        instructions.bind(size=instructions.setter("text_size"))
+        body.add_widget(instructions)
+
+        self._swap_popup_status = Label(
+            text="", color=(1.0, 0.85, 0.5, 1.0),
+            size_hint_y=None, height=24,
+            halign="left", valign="middle",
+        )
+        self._swap_popup_status.bind(size=self._swap_popup_status.setter("text_size"))
+        body.add_widget(self._swap_popup_status)
+
+        btn_row = BoxLayout(orientation="horizontal", size_hint_y=None,
+                            height=40, spacing=8)
+        swap_btn = Button(text="Swap")
+        swap_btn.bind(on_press=lambda _b, k=world_key: self._on_swap_clicked(k))
+        skip_btn = Button(text="Skip this session")
+        skip_btn.bind(on_press=lambda _b: self._on_swap_skipped())
+        btn_row.add_widget(swap_btn)
+        btn_row.add_widget(skip_btn)
+        body.add_widget(btn_row)
+
+        self._swap_popup_swap_btn = swap_btn
+
+        popup = Popup(
+            title="Save swap required",
+            content=body,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False,
+        )
+        self._swap_popup = popup
+        popup.open()
+
+    def _dismiss_swap_popup(self) -> None:
+        """Tear down the swap popup + cancel any in-flight game-closed poll."""
+        if self._swap_poll_event is not None:
+            try:
+                self._swap_poll_event.cancel()
+            except Exception:
+                pass
+            self._swap_poll_event = None
+        if self._swap_popup is not None:
+            self._swap_popup.dismiss()
+            self._swap_popup = None
+        self._swap_popup_status = None
+        self._swap_popup_swap_btn = None
+
+    def _on_swap_clicked(self, world_key: str) -> None:
+        """Run the swap immediately if the game is closed; otherwise begin
+        polling for it to close.
+
+        New flow (Stage A.1): the modal is opened pre-attach, so the game
+        is almost always already closed when the user clicks. Skip the poll
+        loop in that case and run `perform_save_swap` inline. The polling
+        path stays as a defensive fallback for any future code path that
+        opens the modal mid-session."""
+        if self._swap_poll_event is not None:
+            return  # already polling
+        if self._swap_popup_swap_btn is not None:
+            self._swap_popup_swap_btn.disabled = True
+        # Detach our own pymem handle so its cached process reference doesn't
+        # keep a side-channel alive. Idempotent if the handle was never opened.
+        try:
+            self.ctx.memory.detach()
+        except Exception:
+            pass
+        # Fast-path: game already closed → swap immediately.
+        from .save_manager import _is_game_running
+        if not _is_game_running():
+            from CommonClient import logger
+            ok, msg = self.ctx.perform_save_swap(world_key)
+            logger.info(msg)
+            if ok:
+                self._dismiss_swap_popup()
+            else:
+                if self._swap_popup_status is not None:
+                    self._swap_popup_status.text = msg
+                if self._swap_popup_swap_btn is not None:
+                    self._swap_popup_swap_btn.disabled = False
+            return
+        # Slow-path: game running → poll until closed.
+        if self._swap_popup_status is not None:
+            self._swap_popup_status.text = "Waiting for the game to close..."
+        self._swap_poll_event = Clock.schedule_interval(
+            lambda _dt, k=world_key: self._poll_for_game_closed(k), 1.0,
+        )
+
+    def _poll_for_game_closed(self, world_key: str) -> None:
+        """Clock callback. Once the game can no longer be attached, run the
+        swap and tear down the modal."""
+        from .save_manager import _is_game_running
+        if _is_game_running():
+            return
+        # Stop polling first so the swap can't be re-entered if it takes >1s.
+        if self._swap_poll_event is not None:
+            try:
+                self._swap_poll_event.cancel()
+            except Exception:
+                pass
+            self._swap_poll_event = None
+
+        from CommonClient import logger
+        ok, msg = self.ctx.perform_save_swap(world_key)
+        logger.info(msg)
+        if ok:
+            self._dismiss_swap_popup()
+        else:
+            # Surface the failure inline; leave the modal open so the user can
+            # retry (e.g. they relaunched the game between polls).
+            if self._swap_popup_status is not None:
+                self._swap_popup_status.text = msg
+            if self._swap_popup_swap_btn is not None:
+                self._swap_popup_swap_btn.disabled = False
+
+    def _on_swap_skipped(self) -> None:
+        from CommonClient import logger
+        self.ctx.skip_save_swap()
+        logger.info("save swap skipped for this session")
+        self._dismiss_swap_popup()
+
+    # ---- Saves tab -------------------------------------------------------
+
+    def _render_saves_tab(self) -> None:
+        if self._saves_status_label is None or self._saves_table_view is None:
+            return
+        sm = self.ctx.save_manager
+        if sm is None:
+            self._saves_status_label.text = "Save manager not initialized."
+            self._saves_table_view.clear_widgets()
+            return
+
+        try:
+            worlds = sm.list_worlds()
+        except Exception as exc:
+            self._saves_status_label.text = f"Could not list worlds: {exc}"
+            self._saves_table_view.clear_widgets()
+            return
+
+        try:
+            last_active = sm.get_last_active_world() or "(none)"
+        except Exception:
+            last_active = "(unknown)"
+        cloud_status = "off" if self.ctx.cloud_off_satisfied else "on/unknown"
+        self._saves_status_label.text = (
+            f"Active world: {last_active}\n"
+            f"Steam Cloud: {cloud_status}    Backups: {len(worlds)}"
+        )
+
+        self._saves_table_view.clear_widgets()
+        if not worlds:
+            self._saves_table_view.add_widget(DuelChip(text="(no AP worlds tracked yet)"))
+            return
+
+        # Header row.
+        header = BoxLayout(orientation="horizontal", size_hint_y=None, height=24, spacing=4)
+        for text, weight in (
+            ("World key", 0.5),
+            ("Created", 0.2),
+            ("Last synced", 0.2),
+            ("", 0.1),
+        ):
+            lbl = Label(text=f"[b]{text}[/b]", markup=True,
+                        size_hint_x=weight, halign="left", valign="middle")
+            lbl.bind(size=lbl.setter("text_size"))
+            header.add_widget(lbl)
+        self._saves_table_view.add_widget(header)
+
+        for meta in worlds:
+            row = BoxLayout(orientation="horizontal", size_hint_y=None, height=28, spacing=4)
+            is_active = meta.world_key == sm.get_last_active_world()
+            key_text = f"[b]{meta.world_key}[/b]  (active)" if is_active else meta.world_key
+            key_lbl = Label(text=key_text, markup=True,
+                            size_hint_x=0.5, halign="left", valign="middle")
+            key_lbl.bind(size=key_lbl.setter("text_size"))
+            row.add_widget(key_lbl)
+            row.add_widget(self._timestamp_label(meta.created_at, 0.2))
+            row.add_widget(self._timestamp_label(meta.last_synced_at, 0.2))
+            restore_btn = Button(text="Restore", size_hint_x=0.1, disabled=is_active)
+            restore_btn.bind(
+                on_press=lambda _b, k=meta.world_key: self._on_restore_world_clicked(k)
+            )
+            row.add_widget(restore_btn)
+            self._saves_table_view.add_widget(row)
+
+    @staticmethod
+    def _timestamp_label(iso_value: str, weight: float) -> Label:
+        # ISO-8601 with microseconds is too dense for the row; clip to date+time.
+        text = (iso_value or "").split(".")[0].replace("T", " ")
+        lbl = Label(text=text, size_hint_x=weight, halign="left", valign="middle")
+        lbl.bind(size=lbl.setter("text_size"))
+        return lbl
+
+    def _on_open_backup_folder_clicked(self) -> None:
+        import os
+        sm = self.ctx.save_manager
+        if sm is None:
+            return
+        backups_dir = sm.paths.backups
+        try:
+            backups_dir.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(backups_dir))  # type: ignore[attr-defined]
+        except Exception as exc:
+            from CommonClient import logger
+            logger.warning(f"Could not open backup folder {backups_dir}: {exc}")
+
+    # ---- restore-confirmation modal (used by row Restore + pre-AP) ------
+
+    def _on_restore_world_clicked(self, world_key: str) -> None:
+        self._open_restore_popup(
+            title=f"Restore world: {world_key}",
+            body_text=(
+                f"[b]Restore the AP world [color=ffcc88]{world_key}[/color]?[/b]\n\n"
+                "The current savegame.dat will be captured (into its matching "
+                "backup if recognized, otherwise to a timestamped orphan dir) "
+                "and replaced with this world's tracked save. Then click "
+                "Launch on the Status tab to start the game.\n\n"
+                "(If the game is currently running, the Restore button will "
+                "wait for you to close it first.)"
+            ),
+            action_text="Restore",
+            action=lambda: self.ctx.perform_save_swap(world_key),
+        )
+
+    def _on_restore_pre_ap_clicked(self) -> None:
+        sm = self.ctx.save_manager
+        if sm is None:
+            return
+        if not sm.paths.pre_ap_save.exists():
+            from CommonClient import logger
+            logger.warning("Pre-AP snapshot does not exist; nothing to restore.")
+            return
+        self._open_restore_popup(
+            title="Restore pre-AP save",
+            body_text=(
+                "[b]Restore the original pre-AP savegame.dat?[/b]\n\n"
+                "The current save will be captured (into its matching AP "
+                "world backup if recognized, otherwise to a timestamped "
+                "orphan dir) and the snapshot taken the very first time you "
+                "ran the AP client will be put back in place. AP will not "
+                "reconnect to a world until you load a connected slot.\n\n"
+                "(If the game is currently running, the Restore button will "
+                "wait for you to close it first.)"
+            ),
+            action_text="Restore",
+            action=lambda: self.ctx.perform_pre_ap_restore(),
+        )
+
+    def _open_restore_popup(
+        self,
+        *,
+        title: str,
+        body_text: str,
+        action_text: str,
+        action: Callable[[], tuple[bool, str]],
+    ) -> None:
+        if self._restore_popup is not None:
+            return  # already open
+        body = BoxLayout(orientation="vertical", spacing=8, padding=10)
+        instructions = Label(
+            text=body_text, markup=True, halign="left", valign="top",
+        )
+        instructions.bind(size=instructions.setter("text_size"))
+        body.add_widget(instructions)
+
+        self._restore_popup_status = Label(
+            text="", color=(1.0, 0.85, 0.5, 1.0),
+            size_hint_y=None, height=24,
+            halign="left", valign="middle",
+        )
+        self._restore_popup_status.bind(size=self._restore_popup_status.setter("text_size"))
+        body.add_widget(self._restore_popup_status)
+
+        btn_row = BoxLayout(orientation="horizontal", size_hint_y=None,
+                            height=40, spacing=8)
+        action_btn = Button(text=action_text)
+        action_btn.bind(on_press=lambda _b: self._on_restore_clicked(action))
+        cancel_btn = Button(text="Cancel")
+        cancel_btn.bind(on_press=lambda _b: self._dismiss_restore_popup())
+        btn_row.add_widget(action_btn)
+        btn_row.add_widget(cancel_btn)
+        body.add_widget(btn_row)
+
+        self._restore_popup_action_btn = action_btn
+
+        popup = Popup(
+            title=title,
+            content=body,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False,
+        )
+        self._restore_popup = popup
+        popup.open()
+
+    def _on_restore_clicked(self, action: Callable[[], tuple[bool, str]]) -> None:
+        if self._restore_poll_event is not None:
+            return  # already polling
+        if self._restore_popup_action_btn is not None:
+            self._restore_popup_action_btn.disabled = True
+        try:
+            self.ctx.memory.detach()
+        except Exception:
+            pass
+        # Fast-path: game already closed → run the action inline. The Saves
+        # tab is the typical entry point and the user almost always opens it
+        # with the game closed (per the new Stage A.-1 model).
+        from .save_manager import _is_game_running
+        if not _is_game_running():
+            from CommonClient import logger
+            ok, msg = action()
+            logger.info(msg)
+            if ok:
+                self._dismiss_restore_popup()
+            else:
+                if self._restore_popup_status is not None:
+                    self._restore_popup_status.text = msg
+                if self._restore_popup_action_btn is not None:
+                    self._restore_popup_action_btn.disabled = False
+            return
+        # Slow-path: game running → poll until closed.
+        if self._restore_popup_status is not None:
+            self._restore_popup_status.text = "Waiting for the game to close..."
+        self._restore_poll_event = Clock.schedule_interval(
+            lambda _dt, a=action: self._poll_for_restore_game_closed(a), 1.0,
+        )
+
+    def _poll_for_restore_game_closed(
+        self, action: Callable[[], tuple[bool, str]],
+    ) -> None:
+        from .save_manager import _is_game_running
+        if _is_game_running():
+            return
+        if self._restore_poll_event is not None:
+            try:
+                self._restore_poll_event.cancel()
+            except Exception:
+                pass
+            self._restore_poll_event = None
+
+        from CommonClient import logger
+        ok, msg = action()
+        logger.info(msg)
+        if ok:
+            self._dismiss_restore_popup()
+        else:
+            if self._restore_popup_status is not None:
+                self._restore_popup_status.text = msg
+            if self._restore_popup_action_btn is not None:
+                self._restore_popup_action_btn.disabled = False
+
+    def _dismiss_restore_popup(self) -> None:
+        if self._restore_poll_event is not None:
+            try:
+                self._restore_poll_event.cancel()
+            except Exception:
+                pass
+            self._restore_poll_event = None
+        if self._restore_popup is not None:
+            self._restore_popup.dismiss()
+            self._restore_popup = None
+        self._restore_popup_status = None
+        self._restore_popup_action_btn = None
 
     def _on_archetype_picked(self, display: str) -> None:
         from CommonClient import logger

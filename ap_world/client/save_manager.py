@@ -45,6 +45,10 @@ PRE_AP_DIRNAME = "pre_ap"
 BACKUPS_DIRNAME = "backups"
 ROOT_DIRNAME = "ygo_lotd_ap"
 
+# Steam install dir name for LotD-LE under `steamapps/common/`. Verified
+# 2026-05-10 against an actual install.
+GAME_INSTALL_DIRNAME = "Yu-Gi-Oh! Legacy of the Duelist Link Evolution"
+
 # Filesystem-sanitization for world keys.
 _WORLD_KEY_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -75,6 +79,7 @@ class SteamPaths:
     userdata_save: Path             # <steam_root>/userdata/<steamid>/1150640/remote/savegame.dat
     userdata_remote_dir: Path       # parent of userdata_save
     remotecache_vdf: Path           # <steam_root>/userdata/<steamid>/1150640/remotecache.vdf
+    game_exe: Optional[Path] = None # <library>/steamapps/common/<install_dir>/Lotd.exe (lazy)
 
 
 # Steam syncstate codes observed in remotecache.vdf:
@@ -282,6 +287,30 @@ def _find_userdata_save_path(steam_root: Path) -> SteamPaths:
     )
 
 
+def _parse_library_paths(vdf_text: str) -> list[Path]:
+    """Extract every `path` value from a Steam `libraryfolders.vdf`.
+
+    The file lists Steam library locations (one per drive). Each entry has
+    a `"path"  "<value>"` line; we just collect them all in source order.
+    Same regex-VDF approach as `_parse_savegame_syncstate` — full VDF
+    parser is overkill for one field.
+
+    Returns an empty list on unrecognized input rather than raising — the
+    caller (game-exe discovery) treats "no libraries" as "exe not found"
+    so a corrupt vdf gracefully degrades to a SaveManagerError downstream.
+    """
+    paths: list[Path] = []
+    for m in re.finditer(r'"path"\s*"([^"]+)"', vdf_text):
+        # Steam writes Windows paths with double-backslashes in the vdf
+        # (`"C:\\Program Files (x86)\\Steam"`). Python's regex captures the
+        # raw string with single backslashes already (the vdf is JSON-ish
+        # but not strict JSON — the `\\` is a literal escape Steam writes
+        # so its own parser can read the path back).
+        raw = m.group(1).replace("\\\\", "\\")
+        paths.append(Path(raw))
+    return paths
+
+
 def _parse_savegame_syncstate(vdf_text: str) -> Optional[str]:
     """Extract the `syncstate` value of the `savegame.dat` block in a
     Steam `remotecache.vdf`.
@@ -405,6 +434,79 @@ class SaveManager:
             return False
         return state == CLOUD_DISABLED_SYNCSTATE
 
+    def get_game_exe(self) -> Path:
+        """Return the path to LotD-LE's main executable, discovering and
+        persisting it on first call.
+
+        Discovery order:
+          1. `config.json::game_exe` if present and the file still exists.
+          2. `_find_game_executable()` (parses libraryfolders.vdf).
+
+        Raises `SaveManagerError` if discovery fails. On success, caches on
+        `self.steam.game_exe` and persists to config.json so future calls
+        skip the rescan. The user can hand-edit `config.json::game_exe` to
+        force a specific path (e.g. if discovery picks the wrong .exe).
+        """
+        steam = self.steam
+        if steam.game_exe is not None and steam.game_exe.exists():
+            return steam.game_exe
+        # Try the cached config value first.
+        config = self._read_config() or {}
+        cached = config.get("game_exe")
+        if cached:
+            cached_path = Path(cached)
+            if cached_path.exists():
+                steam.game_exe = cached_path
+                return cached_path
+            logger.warning(
+                "Cached game_exe at %s no longer exists; rediscovering", cached_path,
+            )
+        exe = self._find_game_executable()
+        steam.game_exe = exe
+        # Persist via _write_config so the field shows up in config.json.
+        self._write_config()
+        return exe
+
+    def _find_game_executable(self) -> Path:
+        """Parse `libraryfolders.vdf` and search every Steam library for the
+        LotD-LE install dir. Returns the first matching exe.
+
+        Search order: prefer `Lotd.exe`, then fall back to other names from
+        `GAME_PROCESS_NAMES`. Raises `SaveManagerError` if the vdf is missing
+        or no matching exe is found.
+        """
+        steam = self.steam
+        vdf_path = steam.steam_root / "steamapps" / "libraryfolders.vdf"
+        if not vdf_path.exists():
+            raise SaveManagerError(
+                f"Steam libraryfolders.vdf not found at {vdf_path}; "
+                "cannot discover game install location"
+            )
+        try:
+            text = vdf_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise SaveManagerError(
+                f"Could not read {vdf_path}: {exc}"
+            ) from exc
+        libraries = _parse_library_paths(text)
+        if not libraries:
+            raise SaveManagerError(
+                f"No library paths found in {vdf_path} (file may be corrupt)"
+            )
+        for library in libraries:
+            install_dir = library / "steamapps" / "common" / GAME_INSTALL_DIRNAME
+            if not install_dir.exists():
+                continue
+            for exe_name in GAME_PROCESS_NAMES:
+                candidate = install_dir / exe_name
+                if candidate.exists():
+                    logger.info("Found game executable: %s", candidate)
+                    return candidate
+        raise SaveManagerError(
+            f"LotD-LE executable not found under any Steam library "
+            f"(searched: {[str(p) for p in libraries]}). Is the game installed?"
+        )
+
     @property
     def steam(self) -> SteamPaths:
         """Lazily-resolved Steam paths. Calls ensure_setup if needed."""
@@ -443,6 +545,7 @@ class SaveManager:
         self.ensure_setup()
         world_key = make_world_key(seed_name, slot_name)
         world_save = self.world_save(world_key)
+        world_meta = self.world_meta_path(world_key)
         userdata_save = self.steam.userdata_save
 
         running = (
@@ -451,7 +554,11 @@ class SaveManager:
             else _is_game_running()
         )
 
-        if not world_save.exists():
+        # "Tracked" check uses meta.json existence, not savegame.dat —
+        # `init_fresh_world` no longer pre-copies a save into the world dir
+        # (the player is supposed to start with a clean game state), so a
+        # tracked-but-empty world dir is a normal lifecycle state.
+        if not world_meta.exists():
             if running:
                 # Don't touch the live save under a running game. The Stage B
                 # caller will log a warning and the user can disconnect-then-
@@ -459,7 +566,15 @@ class SaveManager:
                 return WorldState.GAME_RUNNING_DEFERRED, world_key
             return WorldState.FRESH_NEEDS_INIT, world_key
 
-        # Backup exists — compare hashes.
+        # World is tracked. If it has no savegame.dat yet (just-initialized,
+        # or game crashed before generating one), there's nothing to compare;
+        # report MATCHES so we don't accidentally trigger a swap. The
+        # disconnect-time capture will fill in the savegame.dat the first
+        # time the user plays + closes the game.
+        if not world_save.exists():
+            return WorldState.MATCHES_USERDATA, world_key
+
+        # Backup exists — compare hashes against userdata.
         if not userdata_save.exists():
             # Edge case: backup exists but userdata save vanished. Treat as
             # mismatch so the swap logic restores the backup into userdata.
@@ -478,19 +593,24 @@ class SaveManager:
         team: Optional[int] = None,
         slot: Optional[int] = None,
     ) -> WorldMeta:
-        """Create a new `backups/<world_key>/` from the current userdata save.
+        """Create an empty `backups/<world_key>/` directory + meta.json for a
+        new AP world. **Does NOT copy userdata** — the goal is for the player
+        to start with a clean in-game state (no carryover decks/cards/duel
+        progress from whatever they had loaded before).
 
-        Used when `get_world_state()` returns `FRESH_NEEDS_INIT`. Caller is
-        responsible for ensuring the game is closed (this method does not
-        re-check; it's a small race window but the Stage B caller already
-        observes `not running` to reach this branch).
+        The caller (Stage A.1) is expected to follow up with
+        `clear_userdata_for_fresh_launch()` so the game generates a fresh
+        empty save when the user clicks Launch. The disconnect-time
+        `capture_to_active_world()` then writes that fresh save into this
+        world dir, populating its `savegame.dat` going forward.
+
+        Used when `get_world_state()` returns `FRESH_NEEDS_INIT`. Game must
+        be closed (Stage A.-1 already gated on this).
         """
         self.ensure_setup()
         world_key = make_world_key(seed_name, slot_name)
         world_dir = self.world_dir(world_key)
         world_dir.mkdir(parents=True, exist_ok=True)
-
-        _copy_atomic(self.steam.userdata_save, self.world_save(world_key))
 
         now = _now_iso()
         meta = WorldMeta(
@@ -504,8 +624,51 @@ class SaveManager:
         )
         self._write_meta(meta)
         self._set_last_active_world(world_key)
-        logger.info("Initialized new AP world save: %s", world_dir)
+        logger.info("Initialized new AP world (empty): %s", world_dir)
         return meta
+
+    def clear_userdata_for_fresh_launch(self) -> bool:
+        """Capture whatever's currently in userdata (matching backup or orphan
+        dir), then delete `userdata/savegame.dat` so the game creates a fresh
+        empty save on next launch. Returns True if a file was deleted, False
+        if the file was already absent.
+
+        Used in conjunction with `init_fresh_world` when bringing up a new
+        AP world. Game must be closed (caller's responsibility — the same
+        Stage A.-1 gate that FRESH_NEEDS_INIT already passes).
+
+        Always capture-before-delete: even if the prior `capture_to_active_world`
+        already wrote userdata into the previous active world's dir, this
+        capture is idempotent (matching-hash branch is a no-op log) so calling
+        twice is harmless. If the userdata was UNTRACKED (e.g. user manually
+        swapped saves outside the AP client), the orphan path catches it so
+        nothing is ever lost.
+        """
+        userdata_save = self.steam.userdata_save
+        if not userdata_save.exists():
+            return False
+        # Belt-and-suspenders: ensure a copy lives somewhere before we delete.
+        try:
+            self._capture_current_userdata(userdata_save)
+        except Exception as exc:
+            logger.warning(
+                "capture-before-delete failed for %s (%s); refusing to delete",
+                userdata_save, exc,
+            )
+            return False
+        try:
+            userdata_save.unlink()
+        except OSError as exc:
+            logger.warning(
+                "Could not delete userdata save %s for fresh launch: %s",
+                userdata_save, exc,
+            )
+            return False
+        logger.info(
+            "Cleared userdata save %s; game will generate a fresh empty save on launch",
+            userdata_save,
+        )
+        return True
 
     def swap_to_world(self, world_key: str) -> WorldMeta:
         """Activate `backups/<world_key>/savegame.dat` as the live userdata save.
@@ -520,9 +683,10 @@ class SaveManager:
         """
         self.ensure_setup()
         world_save = self.world_save(world_key)
-        if not world_save.exists():
+        world_meta = self.world_meta_path(world_key)
+        if not world_meta.exists():
             raise SaveManagerError(
-                f"Cannot swap to {world_key}: backup file does not exist at {world_save}"
+                f"Cannot swap to {world_key}: world is not tracked (no meta.json)"
             )
         if _is_game_running():
             raise SaveManagerError(
@@ -534,8 +698,18 @@ class SaveManager:
         if userdata_save.exists():
             self._capture_current_userdata(userdata_save)
 
-        # 2. Copy this world's backup into userdata.
-        _copy_atomic(world_save, userdata_save)
+        # 2a. World has a tracked save → restore it.
+        # 2b. World has no tracked save (fresh world being re-activated) →
+        #     delete userdata so the game generates a fresh empty save.
+        if world_save.exists():
+            _copy_atomic(world_save, userdata_save)
+        else:
+            if userdata_save.exists():
+                userdata_save.unlink()
+            logger.info(
+                "Swap target %s has no tracked save; cleared userdata for fresh launch",
+                world_key,
+            )
 
         # 3. Refresh meta + config.
         meta = self._read_meta(world_key) or WorldMeta(
@@ -569,6 +743,55 @@ class SaveManager:
         _copy_atomic(self.paths.pre_ap_save, userdata_save)
         self._set_last_active_world(None)
         logger.info("Restored pre-AP save snapshot to %s", userdata_save)
+
+    def capture_to_active_world(self) -> Optional[str]:
+        """Copy the live userdata `savegame.dat` over the active world's
+        tracked backup, so progress made in-game during this session is
+        persisted to the AP-world's backup directory.
+
+        Used by the AP client on disconnect/shutdown (Step 9). REQUIRES
+        the game to be closed — the in-game save is not flushed to disk
+        until the game closes, so capturing under a running game would
+        write a stale snapshot.
+
+        Returns the world_key on success, None if there's no active world,
+        no userdata save, or the game is still running. Never raises for
+        the "nothing to do" cases — the caller is best-effort cleanup and
+        shouldn't have to handle exceptions for the common no-op path."""
+        if not self._setup_done:
+            # Nothing to capture — ensure_setup never ran, so no active world
+            # and no Steam paths resolved.
+            return None
+        active = self.get_last_active_world()
+        if not active:
+            return None
+        if _is_game_running():
+            logger.info(
+                "Skipping capture-to-active: game still running (in-memory save not flushed)"
+            )
+            return None
+        try:
+            userdata_save = self.steam.userdata_save
+        except SaveManagerError:
+            return None
+        if not userdata_save.exists():
+            return None
+        world_save = self.world_save(active)
+        try:
+            _copy_atomic(userdata_save, world_save)
+        except OSError as exc:
+            logger.warning("capture_to_active_world(%s) failed: %s", active, exc)
+            return None
+        meta = self._read_meta(active)
+        if meta is None:
+            meta = WorldMeta(
+                world_key=active, seed_name="", slot_name="",
+                created_at=_now_iso(),
+            )
+        meta.last_synced_at = _now_iso()
+        self._write_meta(meta)
+        logger.info("Captured live userdata save to active world backup: %s", active)
+        return active
 
     def list_worlds(self) -> list[WorldMeta]:
         """Enumerate all `backups/<world_key>/` directories with a meta.json.
@@ -627,9 +850,16 @@ class SaveManager:
     def _write_config(self) -> None:
         steam = self.steam
         existing = self._read_config() or {}
+        # Preserve any prior game_exe field even if discovery hasn't run yet
+        # this session; bump it if `steam.game_exe` is now resolved.
+        game_exe_value = (
+            str(steam.game_exe) if steam.game_exe is not None
+            else existing.get("game_exe")
+        )
         payload = {
             "steam_root": str(steam.steam_root),
             "userdata_save": str(steam.userdata_save),
+            "game_exe": game_exe_value,
             "last_active_world": existing.get("last_active_world"),
             "updated_at": _now_iso(),
             "schema_version": 1,

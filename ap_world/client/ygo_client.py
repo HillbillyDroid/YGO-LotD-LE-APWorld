@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import subprocess
 import sys
 from argparse import Namespace
 from enum import Enum
@@ -51,7 +52,7 @@ from ..data.pack_archetypes import ARCHETYPE_CARDS, PACK_ARCHETYPES
 from .duel_watcher import DuelWatcher
 from .item_applier import ItemApplier
 from .memory import MemoryHandle
-from .save_manager import SaveManager, SaveManagerError
+from .save_manager import SaveManager, SaveManagerError, WorldState, _is_game_running
 from .sync_enforcer import SyncEnforcer
 
 if TYPE_CHECKING:
@@ -151,6 +152,24 @@ class YGOLotDContext(CommonContext):
     enforcer: SyncEnforcer | None = None
     save_manager: SaveManager | None = None
 
+    # Save-swap gate. Set when Stage B detects the live userdata save does
+    # not match this world's tracked backup. The GUI swap-confirmation modal
+    # (Step 7) reads `swap_world_key` and runs `save_manager.swap_to_world()`
+    # after the user closes the game. Cleared on swap or "skip this session".
+    swap_pending: bool = False
+    swap_world_key: str | None = None
+
+    # Game-launch gate. `game_must_close` is True while Stage A.-1 is waiting
+    # for the user to close a manually-launched game; the Launch button stays
+    # disabled in this state. `launch_required` is True between Stage A.1
+    # success and the user clicking the Launch button — Stage A bails after
+    # A.1, the GUI button drives resume via `_restart_connect_sequence`.
+    # `game_proc` keeps the Popen reference alive so its stdio handles don't
+    # get GC'd; it's purely informational (pymem still drives attachment).
+    game_must_close: bool = False
+    launch_required: bool = False
+    game_proc: subprocess.Popen | None = None
+
     # Cloud-off gate. Set True between Stage A's `is_cloud_disabled()`
     # returning False and the user clicking "Verify" in the GUI modal.
     # Stage A bails when this flips True; the modal's Verify callback
@@ -227,6 +246,11 @@ class YGOLotDContext(CommonContext):
         self.starter_archetype_card_counts = {}
         self.starter_archetype_pending = False
         self.starter_archetype_options = []
+        self.swap_pending = False
+        self.swap_world_key = None
+        self.game_must_close = False
+        self.launch_required = False
+        self.game_proc = None
         self.save_data_ready = False
         self.connection_status = ConnectionStatus.CONNECTED
         self.status_text = "Connected — waiting for save data..."
@@ -324,13 +348,79 @@ class YGOLotDContext(CommonContext):
         self.status_text = "Not connected."
         self.watcher.reset()
         self._refresh_ui()
+        await self._capture_active_world_safe()
         await super().disconnect(*args, **kwargs)
+
+    async def _capture_active_world_safe(self) -> None:
+        """Best-effort: copy userdata `savegame.dat` into the active world's
+        backup directory so any in-game progress made between connect and
+        disconnect/shutdown is persisted. No-op if the game is still running
+        (in-memory save not flushed) or if there's no active world. Drops
+        all exceptions — this is cleanup, not a failure mode."""
+        if self.save_manager is None:
+            return
+        # Drop our pymem handle first so the running-game probe inside
+        # `capture_to_active_world` only sees the actual game process, not
+        # our cached attachment.
+        try:
+            self.memory.detach()
+        except Exception:
+            pass
+        loop = self.asyncio_loop
+        try:
+            if loop is not None:
+                await loop.run_in_executor(None, self.save_manager.capture_to_active_world)
+            else:
+                self.save_manager.capture_to_active_world()
+        except Exception as exc:
+            logger.warning(f"capture_to_active_world failed: {exc}")
 
     # ---- Connect sequence (Stages A / B / C) ------------------------------
 
     async def _connect_sequence(self) -> None:
         # Stage A: attach + wait for save data ----------------------------
         loop = asyncio.get_running_loop()
+
+        # Stage A.-1: game-must-be-closed gate.
+        # The AP client owns the game-launch lifecycle (Stage A.2 + the
+        # Launch button). If the user manually launched the game before
+        # connecting, block here until they close it — save reconciliation
+        # in A.1 must run with the on-disk save authoritative, and we
+        # don't want to attach to a game running with the wrong save loaded.
+        # **Skipped if `game_proc` is alive** — that means we just spawned
+        # the game ourselves via `launch_game()` and are re-entering the
+        # connect sequence to attach. Without this skip, the user would
+        # immediately see "close the game" right after clicking Launch.
+        # Polls once per cooldown; the await asyncio.sleep yields to
+        # disconnect()'s task.cancel().
+        first_probe = True
+        while True:
+            if self.exit_event.is_set():
+                return
+            we_own_game = (
+                self.game_proc is not None and self.game_proc.poll() is None
+            )
+            if we_own_game:
+                self.game_must_close = False
+                self._refresh_ui()
+                break
+            running = await loop.run_in_executor(None, _is_game_running)
+            if not running:
+                if not first_probe:
+                    logger.info("Game closed; resuming connect sequence.")
+                self.game_must_close = False
+                self._refresh_ui()
+                break
+            if first_probe:
+                self.game_must_close = True
+                self.status_text = (
+                    "Close the game before connecting — the AP client launches "
+                    "it for you (Status tab)."
+                )
+                logger.warning(self.status_text)
+                self._refresh_ui()
+                first_probe = False
+            await asyncio.sleep(SAVE_DATA_RETRY_COOLDOWN_SECONDS)
 
         # Stage A.0: SaveManager setup + Steam Cloud off gate.
         # Must run BEFORE memory.attach() so the cloud-off modal can block
@@ -366,6 +456,36 @@ class YGOLotDContext(CommonContext):
             self.cloud_off_required = False
             self.cloud_off_satisfied = True
 
+            # Stage A.1: pre-attach save reconciliation.
+            # Game is guaranteed closed by A.-1, so on-disk state is authoritative.
+            # `_evaluate_save_swap` may set `swap_pending` (mismatch detected) —
+            # if so, bail Stage A and let the GUI swap modal drive resume via
+            # `perform_save_swap` -> `_restart_connect_sequence`.
+            try:
+                await loop.run_in_executor(None, self._evaluate_save_swap)
+            except Exception as exc:
+                logger.exception(f"pre-attach save evaluation failed: {exc}")
+                self.status_text = "Save evaluation failed (see log)."
+                return
+            if self.swap_pending:
+                self._refresh_ui()
+                return
+
+            # Stage A.2: wait for the user to click "Launch game" in the
+            # Status tab. The button calls `launch_game()` which spawns the
+            # exe and `_restart_connect_sequence`s; this Stage A run bails
+            # cleanly here. If the game is somehow already running by the
+            # time we get here (user manually launched between A.-1 and now),
+            # skip the gate and proceed to attach — A.3 will handle it.
+            already_running = await loop.run_in_executor(None, _is_game_running)
+            if not already_running:
+                self.launch_required = True
+                self.status_text = "Click Launch in the Status tab when ready."
+                logger.info(self.status_text)
+                self._refresh_ui()
+                return
+            # Game is up unexpectedly — fall through to A.3.
+
         if self.memory.pm is None:
             attached = await loop.run_in_executor(None, self.memory.attach)
             if not attached:
@@ -378,6 +498,10 @@ class YGOLotDContext(CommonContext):
                         break
 
         logger.info(f"attached to {self.memory.process_name}")
+        # Clear launch_required defensively: covers the case where the user
+        # manually launched the game mid-Stage A (after A.-1 cleared) and the
+        # attach loop then succeeded without the Launch button being clicked.
+        self.launch_required = False
         self.status_text = "Waiting for save data..."
 
         ready = await loop.run_in_executor(
@@ -508,6 +632,79 @@ class YGOLotDContext(CommonContext):
         if not self.starter_granted:
             self.starter_granted = True
             self._persist_bool(_slot_key(self, "starter_granted"), True)
+
+        # Save-swap evaluation moved to Stage A.1 (pre-attach). Stage B
+        # runs only after Stage A.3 attach + Stage A.4 save-data-ready,
+        # both of which presuppose A.1 already succeeded.
+
+    def _evaluate_save_swap(self) -> None:
+        """Stage A.1 sub-step: ask SaveManager what to do with the userdata
+        save for this seed/slot, then dispatch.
+
+        Runs PRE-attach (Stage A.-1 has already gated on game-closed), so
+        `_is_game_running()` is guaranteed False here and FRESH_NEEDS_INIT
+        is always safe (userdata→backup copy with game closed is the
+        canonical case). MISMATCH triggers the swap-pending modal which
+        is also non-game-aware now (game's already closed)."""
+        if self.save_manager is None:
+            return
+        seed_name = getattr(self, "seed_name", None)
+        slot_name = self.auth
+        if not seed_name or not slot_name:
+            logger.warning(
+                "save-swap evaluation skipped: missing seed_name=%r or auth=%r",
+                seed_name, slot_name,
+            )
+            return
+        try:
+            state, world_key = self.save_manager.get_world_state(
+                str(seed_name), str(slot_name),
+            )
+        except SaveManagerError as exc:
+            logger.error(f"get_world_state failed: {exc}")
+            return
+        except Exception as exc:
+            logger.exception(f"get_world_state errored: {exc}")
+            return
+
+        if state is WorldState.FRESH_NEEDS_INIT:
+            try:
+                self.save_manager.init_fresh_world(
+                    str(seed_name), str(slot_name),
+                    team=self.team, slot=self.slot,
+                )
+                # Wipe userdata so the game generates a fresh empty save when
+                # the user clicks Launch. Per AP-world model, every new seed
+                # starts with no carryover from previous play. The clear
+                # method captures-before-delete (orphan-or-matching) so any
+                # untracked userdata save is preserved.
+                cleared = self.save_manager.clear_userdata_for_fresh_launch()
+                logger.info(
+                    f"save manager: initialized fresh world {world_key}; "
+                    f"userdata cleared={cleared}"
+                )
+            except Exception as exc:
+                logger.exception(f"init_fresh_world({world_key}) failed: {exc}")
+                return
+        elif state is WorldState.MATCHES_USERDATA:
+            logger.info(f"save manager: userdata already matches {world_key}")
+        elif state is WorldState.MISMATCH_NEEDS_SWAP:
+            self.swap_pending = True
+            self.swap_world_key = world_key
+            self.status_text = (
+                f"Save mismatch — switch to AP world {world_key} (see Saves tab)"
+            )
+            logger.warning(
+                f"save manager: userdata differs from {world_key}; swap pending"
+            )
+            self._refresh_ui()
+        elif state is WorldState.GAME_RUNNING_DEFERRED:
+            # Should be unreachable: Stage A.-1 already gated on game-closed.
+            # Defensive log; treat as MATCHES (no-op) rather than re-trying.
+            logger.warning(
+                f"save manager: GAME_RUNNING_DEFERRED in pre-attach evaluation "
+                f"for {world_key} — A.-1 gate failed?"
+            )
 
     def _persist_int(self, key: str, value: int) -> None:
         # CommonContext loops are async, but we may be called from a thread.
@@ -702,6 +899,10 @@ class YGOLotDContext(CommonContext):
         self.save_data_ready = False
         self.watcher.reset()
         self.memory.detach()
+        # Clear our spawned-game handle: this game session is over, so
+        # Stage A.-1 should once again gate on `_is_game_running()` (in
+        # case the user re-launches the game manually outside our flow).
+        self.game_proc = None
         self.status_text = "Game process gone — waiting for relaunch..."
         self._refresh_ui()
         # Restart Stage A from the asyncio loop thread. _connect_sequence is
@@ -718,6 +919,122 @@ class YGOLotDContext(CommonContext):
         self.connect_task = asyncio.create_task(
             self._connect_sequence(), name="ygo connect-sequence (reattach)"
         )
+
+    def perform_save_swap(self, world_key: str) -> tuple[bool, str]:
+        """GUI hook: run `save_manager.swap_to_world(world_key)`, drop the
+        pymem handle, restart Stage A.
+
+        REQUIRES the game to be closed; the modal polls before calling here.
+        `swap_to_world` re-checks running itself and will refuse if the user
+        relaunched between the modal's last poll and this call.
+
+        Safe to call from the Kivy main thread; the swap is a small file copy
+        (~44 KB) so we run it inline rather than dispatching to an executor."""
+        if self.save_manager is None:
+            return (False, "Save manager not initialized")
+        try:
+            self.save_manager.swap_to_world(world_key)
+        except SaveManagerError as exc:
+            logger.warning(f"swap_to_world({world_key}) refused: {exc}")
+            return (False, str(exc))
+        except Exception as exc:
+            logger.exception(f"swap_to_world({world_key}) errored: {exc}")
+            return (False, f"Swap failed: {exc}")
+        # Game is closed (we just verified) so pymem isn't attached, but
+        # detach defensively in case the handle outlived the process.
+        self.save_data_ready = False
+        self.watcher.reset()
+        self.memory.detach()
+        self.swap_pending = False
+        self.swap_world_key = None
+        self.launch_required = True
+        self.status_text = f"Swapped to {world_key} — click Launch when ready."
+        self._refresh_ui()
+        loop = self.asyncio_loop
+        if loop is not None and not self.exit_event.is_set():
+            loop.call_soon_threadsafe(self._restart_connect_sequence)
+        return (True, f"Swapped to {world_key}. Click Launch when ready.")
+
+    def perform_pre_ap_restore(self) -> tuple[bool, str]:
+        """GUI hook: copy pre-AP snapshot back over userdata, drop pymem,
+        restart Stage A. Same close-game requirements as `perform_save_swap`."""
+        if self.save_manager is None:
+            return (False, "Save manager not initialized")
+        try:
+            self.save_manager.restore_pre_ap()
+        except SaveManagerError as exc:
+            logger.warning(f"restore_pre_ap refused: {exc}")
+            return (False, str(exc))
+        except Exception as exc:
+            logger.exception(f"restore_pre_ap errored: {exc}")
+            return (False, f"Restore failed: {exc}")
+        self.save_data_ready = False
+        self.watcher.reset()
+        self.memory.detach()
+        self.swap_pending = False
+        self.swap_world_key = None
+        self.launch_required = True
+        self.status_text = "Pre-AP save restored — click Launch when ready."
+        self._refresh_ui()
+        loop = self.asyncio_loop
+        if loop is not None and not self.exit_event.is_set():
+            loop.call_soon_threadsafe(self._restart_connect_sequence)
+        return (True, "Pre-AP save restored. Click Launch when ready.")
+
+    def launch_game(self) -> tuple[bool, str]:
+        """GUI hook: spawn the LotD-LE executable and kick the attach loop.
+
+        Pre-checks `_is_game_running()` and refuses if True (covers the race
+        where the user manually launched between A.-1 clearing and clicking
+        the button). On success, stashes the Popen handle on the context so
+        its stdio handles don't get GC'd, clears `launch_required`, and
+        restarts Stage A — which now finds A.-1 cleared (game just started
+        but Popen.poll says it's alive), A.0/A.1 are idempotent fast-paths,
+        A.2 sees the running game and falls through, A.3 attaches.
+
+        Safe to call from the Kivy main thread; subprocess.Popen returns
+        promptly (just a fork+exec, doesn't wait for the game to come up)."""
+        if self.save_manager is None:
+            return (False, "Save manager not initialized")
+        if _is_game_running():
+            self.launch_required = False
+            self._refresh_ui()
+            return (False, "Game already running")
+        try:
+            exe = self.save_manager.get_game_exe()
+        except SaveManagerError as exc:
+            self.status_text = f"Launch failed: {exc}"
+            logger.warning(self.status_text)
+            self._refresh_ui()
+            return (False, str(exc))
+        try:
+            # close_fds=True keeps our stdio handles separate from the game's;
+            # not setting `creationflags` so the game inherits a normal Win32
+            # window (DETACHED_PROCESS would block the game's GUI).
+            self.game_proc = subprocess.Popen(
+                [str(exe)], cwd=str(exe.parent), close_fds=True,
+            )
+        except OSError as exc:
+            self.status_text = f"Launch failed: {exc}"
+            logger.warning(self.status_text)
+            self._refresh_ui()
+            return (False, str(exc))
+        self.launch_required = False
+        self.status_text = "Launching game..."
+        logger.info(f"Launched game: {exe} (pid={self.game_proc.pid})")
+        self._refresh_ui()
+        loop = self.asyncio_loop
+        if loop is not None and not self.exit_event.is_set():
+            loop.call_soon_threadsafe(self._restart_connect_sequence)
+        return (True, f"Launched {exe.name}")
+
+    def skip_save_swap(self) -> None:
+        """GUI hook: dismiss the swap-pending state for this session only.
+        Cleared on the next reconnect when Stage B re-evaluates."""
+        self.swap_pending = False
+        self.swap_world_key = None
+        self.status_text = "Save swap skipped — AP state may not match userdata."
+        self._refresh_ui()
 
     def retry_cloud_check(self) -> tuple[bool, str]:
         """GUI hook: re-run `is_cloud_disabled()` and, on success, restart
@@ -943,6 +1260,10 @@ async def main(args: Namespace) -> None:
     ctx.run_cli()
 
     await ctx.exit_event.wait()
+    # Best-effort capture before shutdown — if the game is closed and we
+    # have an active world, persist any progress made this session into
+    # the world's backup dir. Idempotent + exception-tolerant.
+    await ctx._capture_active_world_safe()
     await ctx.shutdown()
 
 
