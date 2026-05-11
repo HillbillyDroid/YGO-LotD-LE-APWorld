@@ -147,7 +147,15 @@ class YGOLotDContext(CommonContext):
     # the enforcer refunding it.
     initial_writes_verified: bool = False
     initial_dp_floor: int = 0
+    initial_writes_stable_ticks: int = 0
     INITIAL_DP_BASELINE: int = 1000  # default DP on a freshly-created save
+    # Number of consecutive ticks where read-back must match before we flip
+    # `initial_writes_verified=True`. The game's New Game routine can clobber
+    # DP/UnlockedContent up to ~10s after Stage B writes, so verifying on the
+    # first tick (T+1s) was firing too early. At POLL_INTERVAL_SECONDS=1s
+    # this gives a ~10s observation window. Tune up if regressions show
+    # later clobbers; tune down once we trust the timing.
+    INITIAL_WRITES_STABLE_TICKS_REQUIRED: int = 10
 
     # Starter archetype pick (one-shot per slot). Cards are stored as a
     # {card_index: count} dict with the same shape as crafted_card_counts so
@@ -267,6 +275,7 @@ class YGOLotDContext(CommonContext):
         self.save_data_ready = False
         self.initial_writes_verified = False
         self.initial_dp_floor = 0
+        self.initial_writes_stable_ticks = 0
         self.connection_status = ConnectionStatus.CONNECTED
         self.status_text = "Connected — waiting for save data..."
 
@@ -566,6 +575,7 @@ class YGOLotDContext(CommonContext):
         # writes for UnlockedContent and DP. Re-applied per-tick in
         # `_tick_body` until verified.
         self.initial_writes_verified = False
+        self.initial_writes_stable_ticks = 0
 
         try:
             self.memory.write_unlocked_content_all()
@@ -1159,9 +1169,12 @@ class YGOLotDContext(CommonContext):
         break the rest of the tick."""
         # 0) Initial-write verify-retry (Strategy 2).
         # Until verified, re-assert UnlockedContent=0x7 and DP>=initial_dp_floor
-        # each tick. Verification succeeds when both reads come back at/above
-        # target; we then stop, so player crafting can spend DP without the
-        # enforcer refunding it.
+        # each tick. Verification requires INITIAL_WRITES_STABLE_TICKS_REQUIRED
+        # consecutive ticks of read-back matching target — a single
+        # successful read is not enough because the game's New Game routine
+        # can clobber values up to ~10s after Stage B (later than the first
+        # tick at T+1s). Any failed observation resets the counter to 0, so
+        # a late clobber re-arms the loop.
         if not self.initial_writes_verified:
             try:
                 self.memory.write_unlocked_content_all()
@@ -1172,11 +1185,24 @@ class YGOLotDContext(CommonContext):
                 content_ok = (content & UNLOCKED_CONTENT_ALL) == UNLOCKED_CONTENT_ALL
                 dp_ok = self.initial_dp_floor == 0 or cur_dp >= self.initial_dp_floor
                 if content_ok and dp_ok:
-                    self.initial_writes_verified = True
-                    logger.info(
-                        f"initial writes verified (UnlockedContent={content:#x}, "
-                        f"DP={cur_dp}, floor={self.initial_dp_floor})"
-                    )
+                    self.initial_writes_stable_ticks += 1
+                    if self.initial_writes_stable_ticks >= self.INITIAL_WRITES_STABLE_TICKS_REQUIRED:
+                        self.initial_writes_verified = True
+                        logger.info(
+                            f"initial writes verified after "
+                            f"{self.initial_writes_stable_ticks} stable ticks "
+                            f"(UnlockedContent={content:#x}, DP={cur_dp}, "
+                            f"floor={self.initial_dp_floor})"
+                        )
+                else:
+                    if self.initial_writes_stable_ticks > 0:
+                        logger.info(
+                            f"initial-write observation failed at tick "
+                            f"{self.initial_writes_stable_ticks} "
+                            f"(UnlockedContent={content:#x} ok={content_ok}, "
+                            f"DP={cur_dp} ok={dp_ok}); resetting counter"
+                        )
+                    self.initial_writes_stable_ticks = 0
             except _PROCESS_GONE_ERRORS:
                 raise
             except Exception as e:
