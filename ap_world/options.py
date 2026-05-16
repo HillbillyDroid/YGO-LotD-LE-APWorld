@@ -27,7 +27,7 @@ class CampaignMode(Choice):
     display_name = "Campaign Mode"
     option_sequential = 0
     option_shuffled = 1
-    default = 0
+    default = 1
 
 
 class GoalMode(Choice):
@@ -42,7 +42,7 @@ class GoalMode(Choice):
     display_name = "Goal"
     option_any_series_finale = 0
     option_duel_count = 1
-    default = 0
+    default = 1
 
 
 class GoalDuelCount(Range):
@@ -52,7 +52,7 @@ class GoalDuelCount(Range):
     display_name = "Goal Duel Count"
     range_start = 2
     range_end = 175
-    default = 30
+    default = 20
 
 
 class HideDefaultCards(DefaultOnToggle):

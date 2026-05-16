@@ -1,0 +1,45 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Verify tag and archipelago.json versions match
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          json_version="$(python -c "import json; print(json.load(open('ap_world/archipelago.json'))['world_version'])")"
+          echo "Git tag version:    $tag_version"
+          echo "archipelago.json:   $json_version"
+          if [ "$tag_version" != "$json_version" ]; then
+            echo "::error::Version drift. tag=$tag_version json=$json_version. Bump ap_world/archipelago.json world_version before tagging."
+            exit 1
+          fi
+
+      - name: Build ygo_lotd.apworld
+        run: python ap_world/build_apworld.py
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            ygo_lotd.apworld

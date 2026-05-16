@@ -9,6 +9,7 @@ from worlds.AutoWorld import World
 from . import items, locations, regions, rules
 from . import options as ygo_options
 from .data.duel_table import DUELS, is_active_duel
+from .web_world import YGOLotDWebWorld
 from .items import (
     CARD_ITEM_TO_INDEX,
     DP_ITEM_AMOUNTS,
@@ -29,6 +30,8 @@ class YGOLotDWorld(World):
     game's in-memory save data each tick."""
 
     game = "YGO LotD-LE"
+
+    web = YGOLotDWebWorld()
 
     options_dataclass = ygo_options.YGOLotDOptions
     options: ygo_options.YGOLotDOptions
