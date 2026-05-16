@@ -121,7 +121,15 @@ That's it — the same file is used for both generation and playing.
    tab. **The client launches Yu-Gi-Oh! itself** — do not start it
    from Steam. After it spawns the game, the client attaches via
    pymem.
-6. After attach, the client's Status tab shows all six series and
+6. **The game will warn that your save data is corrupted on the
+   first launch into a new AP seed.** This is **normal and expected**
+   — every new seed starts with a clean (empty) save, which the game
+   reads as "no save here yet" and surfaces as a corruption warning.
+   Dismiss the warning and continue; the game generates a fresh save
+   and the AP client then writes your starter content into it. This
+   warning will *not* appear on subsequent launches into the same
+   seed.
+7. After attach, the client's Status tab shows all six series and
    their current unlock state. Play any unlocked duel; on win, the
    AP location fires and you can spend earned Duel Points on
    individual cards via the **Crafting** tab.
@@ -157,6 +165,12 @@ hatch.
 
 ## Troubleshooting
 
+- **"Save data is corrupted" warning when the game launches.**
+  Expected on the first launch into any new AP seed — the seed
+  starts with a clean (empty) save, which the game reports as
+  corrupted. Dismiss the warning; the game generates a fresh save
+  and the client writes your starter content in. The warning won't
+  appear on later launches into the same seed.
 - **"Steam Cloud must be disabled"** modal won't go away. The
   client parses Steam's `remotecache.vdf` to detect cloud state and
   fails closed (assumes cloud is on if it can't tell). If you're
