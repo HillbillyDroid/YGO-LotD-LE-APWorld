@@ -91,9 +91,17 @@ That's it — the same file is used for both generation and playing.
 
 ## Playing the seed
 
+> **Do not launch the game yourself.** The AP client launches Yu-Gi-Oh!
+> for you, from its **Launch game** button on the Status tab, *after*
+> it has reconciled your save with the seed. Starting the game from
+> Steam (or any other shortcut) before the client is ready will skip
+> save reconciliation — the client will then detect the game running
+> and ask you to close it before continuing.
+
 1. Disable Steam Cloud for the game (Properties → General →
    uncheck "Keep game saves in the Steam Cloud"). **Close the game
-   completely** before starting the client.
+   completely** if it's already running — do not launch it manually;
+   the client will do that for you in step 5.
 2. Launch the Archipelago Launcher. Click **YGO LotD-LE Client**.
 3. The client opens. Enter the server address (e.g.
    `archipelago.gg:38281`), your slot name, and the room password if
@@ -103,15 +111,17 @@ That's it — the same file is used for both generation and playing.
      client refuses to attach. Disable cloud sync in Steam, click
      Verify, and the check re-runs.
    - **Close the game** — if the game is open when you connect, the
-     client waits for you to close it (the client launches the game
-     itself so the save state is reconciled cleanly first).
+     client waits for you to close it. The client needs the game
+     closed so it can reconcile your save before it launches the
+     game itself.
    - **Save swap** — if you're rejoining a different seed than the
      one currently on disk, the client offers to swap your tracked
      save in. Your current save is captured first, never deleted.
-   - **Launch game** — once setup is reconciled, click **Launch
-     game** on the Status tab. The client spawns the executable and
-     attaches via pymem.
-5. After attach, the client's Status tab shows all six series and
+5. Once setup is reconciled, click **Launch game** on the Status
+   tab. **The client launches Yu-Gi-Oh! itself** — do not start it
+   from Steam. After it spawns the game, the client attaches via
+   pymem.
+6. After attach, the client's Status tab shows all six series and
    their current unlock state. Play any unlocked duel; on win, the
    AP location fires and you can spend earned Duel Points on
    individual cards via the **Crafting** tab.
