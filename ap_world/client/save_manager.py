@@ -88,12 +88,27 @@ class SteamPaths:
 # Verified empirically on the dev machine 2026-05-08: toggling Steam Cloud
 # off for app 1150640 changed savegame.dat's syncstate from "1" to "4".
 # Other values (e.g. "2") presumably indicate transient mid-sync states; we
-# treat anything other than "4" as "cloud likely on" for safety.
-CLOUD_DISABLED_SYNCSTATE = "4"
+# treat anything other than these known states as UNKNOWN and soften the
+# gate to a warning + user-acknowledgement instead of a hard lockout.
+CLOUD_OFF_SYNCSTATES = {"4"}
+CLOUD_ON_SYNCSTATES = {"1", "2"}
 
 
 class SaveManagerError(Exception):
     """Raised for unrecoverable filesystem-side failures."""
+
+
+class CloudStatus(enum.Enum):
+    """Outcome of probing Steam's `remotecache.vdf` for the cloud-sync state.
+
+    `DETECTED_OFF` and `DETECTED_ON` mean the vdf parsed cleanly and the
+    syncstate matched a known value. `UNKNOWN` covers every other case
+    (missing vdf, no savegame.dat block, unparseable, novel syncstate) —
+    consumers should soften the gate to a warning rather than block.
+    """
+    DETECTED_OFF = "detected_off"
+    DETECTED_ON = "detected_on"
+    UNKNOWN = "unknown"
 
 
 class WorldState(enum.Enum):
@@ -396,43 +411,78 @@ class SaveManager:
         self._write_config()
         self._setup_done = True
 
-    def is_cloud_disabled(self) -> bool:
-        """Best-effort check: is Steam Cloud sync disabled for app 1150640?
+    def cloud_status(self) -> tuple[CloudStatus, str]:
+        """Probe Steam's `remotecache.vdf` for the cloud-sync state.
 
-        Returns True iff:
-          - the user passed `cloud_disabled_override=True` at construction, OR
-          - `remotecache.vdf` exists AND its `savegame.dat` block has
-            `syncstate "4"` (empirically the cloud-disabled state).
+        Returns `(status, detail)`. `detail` is a short human-readable string
+        describing what we actually saw (the syncstate value, or why parsing
+        failed) — surfaced in logs and the cloud-warning modal so misfires
+        are diagnosable in the wild without needing log access.
 
-        Treats every other case (missing vdf, unparseable block, any
-        non-"4" syncstate) as "cloud probably on" so the safety gate fails
-        closed.
+        UNKNOWN is reachable via several paths (missing vdf, missing
+        savegame.dat block, novel syncstate); the original empirical mapping
+        was n=1, so we now soften UNKNOWN to "warn + user must acknowledge"
+        rather than treating it as DETECTED_ON.
         """
-        if self._cloud_disabled_override:
-            return True
         try:
             steam = self.steam
-        except SaveManagerError:
-            return False
+        except SaveManagerError as exc:
+            return CloudStatus.UNKNOWN, f"steam paths unresolved: {exc}"
         vdf_path = steam.remotecache_vdf
         if not vdf_path.exists():
-            # No remotecache means Steam has never synced this app for this
-            # user. Could mean cloud is off, but could also mean the user
-            # just hasn't launched the game yet. Fail closed.
-            logger.warning("remotecache.vdf not found at %s; assuming cloud on", vdf_path)
-            return False
+            return CloudStatus.UNKNOWN, f"remotecache.vdf not found at {vdf_path}"
         try:
             text = vdf_path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
-            logger.warning("Could not read %s (%s); assuming cloud on", vdf_path, exc)
-            return False
+            return CloudStatus.UNKNOWN, f"could not read {vdf_path}: {exc}"
         state = _parse_savegame_syncstate(text)
         if state is None:
-            logger.warning(
-                "Could not parse savegame.dat block in %s; assuming cloud on", vdf_path,
-            )
-            return False
-        return state == CLOUD_DISABLED_SYNCSTATE
+            return CloudStatus.UNKNOWN, f"no savegame.dat block in {vdf_path}"
+        if state in CLOUD_OFF_SYNCSTATES:
+            return CloudStatus.DETECTED_OFF, f"syncstate={state}"
+        if state in CLOUD_ON_SYNCSTATES:
+            return CloudStatus.DETECTED_ON, f"syncstate={state}"
+        return CloudStatus.UNKNOWN, f"unrecognized syncstate={state}"
+
+    def is_cloud_disabled(self) -> bool:
+        """Back-compat boolean wrapper around `cloud_status()`.
+
+        True iff the construction-time override is set, the user has
+        previously acknowledged in-app that they've disabled cloud, or the
+        probe came back DETECTED_OFF. UNKNOWN / DETECTED_ON return False;
+        callers that want to distinguish those should use `cloud_status()`
+        directly.
+        """
+        if self._cloud_disabled_override:
+            return True
+        if self.user_confirmed_cloud_off():
+            return True
+        status, detail = self.cloud_status()
+        if status is CloudStatus.DETECTED_OFF:
+            return True
+        logger.warning("cloud_status=%s (%s)", status.value, detail)
+        return False
+
+    def user_confirmed_cloud_off(self) -> bool:
+        """True if the user has previously clicked 'I've disabled cloud,
+        proceed anyway' in the warning modal. Persisted in config.json so
+        the modal doesn't re-pester on every connect."""
+        cfg = self._read_config() or {}
+        return bool(cfg.get("user_confirmed_cloud_off", False))
+
+    def set_user_confirmed_cloud_off(self, value: bool) -> None:
+        """Persist the user's in-modal acknowledgement to config.json."""
+        existing = self._read_config() or {}
+        existing["user_confirmed_cloud_off"] = bool(value)
+        existing["updated_at"] = _now_iso()
+        existing.setdefault("schema_version", 1)
+        # _write_json_atomic doesn't depend on steam paths being resolved,
+        # but defensively populate them when available so the config stays
+        # consistent with `_write_config`'s shape.
+        if self._steam is not None:
+            existing.setdefault("steam_root", str(self._steam.steam_root))
+            existing.setdefault("userdata_save", str(self._steam.userdata_save))
+        _write_json_atomic(self.paths.config, existing)
 
     def get_game_exe(self) -> Path:
         """Return the path to LotD-LE's main executable, discovering and

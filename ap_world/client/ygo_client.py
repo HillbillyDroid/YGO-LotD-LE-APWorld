@@ -52,7 +52,7 @@ from ..data.pack_archetypes import ARCHETYPE_CARDS, PACK_ARCHETYPES
 from .duel_watcher import DuelWatcher
 from .item_applier import ItemApplier
 from .memory import UNLOCKED_CONTENT_ALL, MemoryHandle
-from .save_manager import SaveManager, SaveManagerError, WorldState, _is_game_running
+from .save_manager import CloudStatus, SaveManager, SaveManagerError, WorldState, _is_game_running
 from .sync_enforcer import SyncEnforcer
 
 if TYPE_CHECKING:
@@ -191,15 +191,22 @@ class YGOLotDContext(CommonContext):
     launch_required: bool = False
     game_proc: subprocess.Popen | None = None
 
-    # Cloud-off gate. Set True between Stage A's `is_cloud_disabled()`
-    # returning False and the user clicking "Verify" in the GUI modal.
-    # Stage A bails when this flips True; the modal's Verify callback
-    # restarts the connect sequence on success.
+    # Cloud-off gate. Set True between Stage A's cloud probe coming back
+    # non-DETECTED_OFF and the user either (a) clicking "Verify" in the
+    # GUI modal after disabling cloud or (b) clicking "I've disabled cloud,
+    # proceed anyway" which persists an acknowledgement to config.json so
+    # the modal doesn't re-pester on every reconnect. Stage A bails when
+    # this flips True; both modal buttons restart the connect sequence.
     cloud_off_required: bool = False
-    # Set when the cloud-off override flag was passed at launch (or the
-    # save-manager-side detection succeeded with override). Surfaced on
-    # status line so the user can see the gate is open.
+    # Set when the cloud-off override flag was passed at launch, the
+    # detection came back DETECTED_OFF, or the user previously
+    # acknowledged in-modal. Surfaced on status line so the user can see
+    # the gate is open.
     cloud_off_satisfied: bool = False
+    # Short string describing what the cloud probe actually saw (e.g.
+    # "syncstate=8" or "remotecache.vdf not found at ..."). Surfaced in
+    # the warning modal so misfires are diagnosable without log access.
+    cloud_status_detail: str = ""
 
     # Async tasks
     connect_task: asyncio.Task[None] | None = None
@@ -464,15 +471,23 @@ class YGOLotDContext(CommonContext):
                 self.status_text = "Save manager setup failed (see log)."
                 return
 
-            cloud_disabled = await loop.run_in_executor(
-                None, self.save_manager.is_cloud_disabled,
+            # The probe returns DETECTED_OFF (clear), DETECTED_ON (clear), or
+            # UNKNOWN (couldn't read/parse). Either of the non-OFF outcomes
+            # surfaces the warning modal — but the modal now has a
+            # "proceed anyway" button that persists an acknowledgement to
+            # config.json, so users whose Steam state we can't read aren't
+            # locked out. A construction-time override or a prior
+            # acknowledgement short-circuits the gate.
+            cloud_disabled, status_detail = await loop.run_in_executor(
+                None, self._probe_cloud_state,
             )
+            self.cloud_status_detail = status_detail
             if not cloud_disabled:
                 self.cloud_off_required = True
                 self.cloud_off_satisfied = False
                 self.status_text = (
-                    "Steam Cloud must be disabled for LotD-LE before connecting "
-                    "(see Saves tab)."
+                    "Steam Cloud check unclear — confirm in the warning dialog "
+                    f"({status_detail})."
                 )
                 logger.warning(self.status_text)
                 self._refresh_ui()
@@ -1106,8 +1121,26 @@ class YGOLotDContext(CommonContext):
         self.status_text = "Save swap skipped — AP state may not match userdata."
         self._refresh_ui()
 
+    def _probe_cloud_state(self) -> tuple[bool, str]:
+        """Run the cloud probe; return (gate_open, human_detail).
+
+        gate_open is True when the override flag, a prior user
+        acknowledgement, or a clean DETECTED_OFF probe says we're safe.
+        human_detail is the short string from `cloud_status()` (or a
+        synthesized one for the override/ack short-circuits) so the modal
+        can show what we actually saw.
+        """
+        if self.save_manager is None:
+            return (False, "save manager not initialized")
+        if self.save_manager._cloud_disabled_override:
+            return (True, "CLI override set")
+        if self.save_manager.user_confirmed_cloud_off():
+            return (True, "user previously acknowledged")
+        status, detail = self.save_manager.cloud_status()
+        return (status is CloudStatus.DETECTED_OFF, detail)
+
     def retry_cloud_check(self) -> tuple[bool, str]:
-        """GUI hook: re-run `is_cloud_disabled()` and, on success, restart
+        """GUI hook: re-run the cloud probe and, on success, restart
         Stage A. Returns (now_disabled, message) so the modal can either
         close itself or surface the failure inline.
 
@@ -1117,21 +1150,44 @@ class YGOLotDContext(CommonContext):
         if self.save_manager is None:
             return (False, "Save manager not initialized")
         try:
-            ok = self.save_manager.is_cloud_disabled()
+            ok, detail = self._probe_cloud_state()
         except Exception as exc:
-            logger.exception(f"is_cloud_disabled() failed: {exc}")
+            logger.exception(f"cloud probe failed: {exc}")
             return (False, f"Cloud check errored: {exc}")
+        self.cloud_status_detail = detail
         if not ok:
-            return (False, "Steam Cloud still appears enabled — disable in Steam, then click Verify again.")
+            return (False, f"Cloud still not detected as off ({detail}) — disable in Steam and click Verify, or use 'Proceed anyway' if you've already disabled it.")
+        self._unblock_cloud_gate("Cloud disabled — reconnecting...")
+        return (True, "Cloud sync confirmed off — reconnecting.")
+
+    def acknowledge_cloud_off(self) -> tuple[bool, str]:
+        """GUI hook: user clicked 'I've disabled cloud, proceed anyway'.
+
+        Persists the acknowledgement to config.json so the modal stops
+        re-pestering on every reconnect, then restarts Stage A. The
+        persistence is the whole point — without it the user would have
+        to click Proceed on every connect.
+        """
+        if self.save_manager is None:
+            return (False, "Save manager not initialized")
+        try:
+            self.save_manager.set_user_confirmed_cloud_off(True)
+        except Exception as exc:
+            logger.exception(f"persisting cloud-off ack failed: {exc}")
+            return (False, f"Could not save acknowledgement: {exc}")
+        self._unblock_cloud_gate("Cloud-off acknowledged — reconnecting...")
+        return (True, "Acknowledged — reconnecting. (Won't ask again on this PC.)")
+
+    def _unblock_cloud_gate(self, status: str) -> None:
+        """Shared tail of `retry_cloud_check` / `acknowledge_cloud_off`:
+        clear the gate flags, update status, and kick a fresh Stage A."""
         self.cloud_off_required = False
         self.cloud_off_satisfied = True
-        self.status_text = "Cloud disabled — reconnecting..."
+        self.status_text = status
         self._refresh_ui()
-        # Kick a fresh connect sequence on the asyncio loop.
         loop = self.asyncio_loop
         if loop is not None and not self.exit_event.is_set():
             loop.call_soon_threadsafe(self._restart_connect_sequence)
-        return (True, "Cloud sync confirmed off — reconnecting.")
 
     # ---- Live poll loop ---------------------------------------------------
 

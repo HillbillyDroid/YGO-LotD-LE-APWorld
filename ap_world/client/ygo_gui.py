@@ -522,26 +522,31 @@ class YGOLotDManager(GameManager):
     # ---- cloud-off modal -------------------------------------------------
 
     def _open_cloud_popup(self) -> None:
-        """Modal blocking Stage A until the user confirms Steam Cloud is off
-        for LotD-LE. Mirrors the archetype-picker pattern (non-dismissable,
-        scrollable in case the user's resolution is tiny). Verify button
-        re-runs `is_cloud_disabled()` and either closes the modal + restarts
-        Stage A on success or surfaces the failure inline."""
+        """Modal warning Stage A that Steam Cloud may still be on. Two
+        buttons: 'Verify' re-runs the auto-detect probe; 'I've disabled
+        cloud, proceed anyway' persists an acknowledgement so future
+        connects skip the gate. Non-dismissable so the user has to make
+        an explicit choice the first time."""
+        detail = getattr(self.ctx, "cloud_status_detail", "") or "no detail"
         body = BoxLayout(orientation="vertical", spacing=8, padding=10)
         instructions = Label(
             text=(
-                "[b]Disable Steam Cloud sync for Yu-Gi-Oh! Legacy of the Duelist: "
-                "Link Evolution before continuing.[/b]\n\n"
-                "Steps:\n"
+                "[b]Could not confirm Steam Cloud is disabled for "
+                "Yu-Gi-Oh! Legacy of the Duelist: Link Evolution.[/b]\n\n"
+                f"Probe result: [i]{detail}[/i]\n\n"
+                "If Cloud is enabled, Steam will overwrite the savegame.dat the "
+                "AP client swaps between worlds on next game launch, which can "
+                "corrupt your AP world progress.\n\n"
+                "To disable Cloud in Steam:\n"
                 "  1. Open Steam.\n"
                 "  2. Right-click [b]Yu-Gi-Oh! Legacy of the Duelist: Link Evolution[/b] "
                 "in your Library.\n"
                 "  3. Properties -> General -> uncheck "
                 "[b]Keep games saves in the Steam Cloud[/b].\n"
-                "  4. Click Verify below.\n\n"
-                "Why: the AP client backs up and swaps savegame.dat between worlds. "
-                "Steam Cloud overwrites those swaps from the server-side copy on "
-                "next launch, which would corrupt your AP world progress."
+                "  4. Click [b]Verify[/b] below.\n\n"
+                "If you've already disabled Cloud and our detection is wrong, "
+                "click [b]Proceed anyway[/b]. Your choice is remembered so this "
+                "dialog won't reappear on this PC."
             ),
             markup=True, halign="left", valign="top",
         )
@@ -561,10 +566,13 @@ class YGOLotDManager(GameManager):
         verify_btn = Button(text="Verify")
         verify_btn.bind(on_press=lambda _b: self._on_cloud_verify_clicked())
         btn_row.add_widget(verify_btn)
+        proceed_btn = Button(text="I've disabled cloud — proceed anyway")
+        proceed_btn.bind(on_press=lambda _b: self._on_cloud_proceed_clicked())
+        btn_row.add_widget(proceed_btn)
         body.add_widget(btn_row)
 
         popup = Popup(
-            title="Steam Cloud must be disabled",
+            title="Steam Cloud check",
             content=body,
             size_hint=(0.8, 0.8),
             auto_dismiss=False,
@@ -580,12 +588,27 @@ class YGOLotDManager(GameManager):
             # _refresh_impl will tear the popup down once `cloud_off_required`
             # flips False on the next refresh tick (driven by the connect
             # sequence's status_text update).
-            if self._cloud_popup is not None:
-                self._cloud_popup.dismiss()
-                self._cloud_popup = None
-                self._cloud_popup_error = None
+            self._dismiss_cloud_popup()
         elif self._cloud_popup_error is not None:
             self._cloud_popup_error.text = msg
+
+    def _on_cloud_proceed_clicked(self) -> None:
+        """User asserts cloud is off and accepts the consequences if wrong.
+        Persists the ack to config.json (so we don't re-pester) and kicks
+        Stage A."""
+        from CommonClient import logger
+        ok, msg = self.ctx.acknowledge_cloud_off()
+        logger.info(msg)
+        if ok:
+            self._dismiss_cloud_popup()
+        elif self._cloud_popup_error is not None:
+            self._cloud_popup_error.text = msg
+
+    def _dismiss_cloud_popup(self) -> None:
+        if self._cloud_popup is not None:
+            self._cloud_popup.dismiss()
+            self._cloud_popup = None
+            self._cloud_popup_error = None
 
     # ---- save-swap modal -------------------------------------------------
 

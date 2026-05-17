@@ -11,8 +11,10 @@
 > on disk between seeds, and Steam Cloud will silently restore the
 > cloud copy on the next launch if it stays on, undoing every swap.
 > Right-click the game in Steam → Properties → General → uncheck
-> "Keep game saves in the Steam Cloud". The client refuses to attach
-> until cloud is off.
+> "Keep game saves in the Steam Cloud". The client checks for this
+> on connect and shows a warning modal if it can't confirm cloud is
+> off — the modal has a "proceed anyway" button if you've already
+> disabled cloud but the auto-detect doesn't pick it up.
 >
 > **Your pre-AP save is automatically backed up** to
 > `Documents/ygo_lotd_ap/backups/pre_ap/savegame.dat` the first time
@@ -107,9 +109,11 @@ That's it — the same file is used for both generation and playing.
    `archipelago.gg:38281`), your slot name, and the room password if
    the server requires one. Click **Connect**.
 4. The client will walk you through any required steps:
-   - **Steam Cloud must be off** — if not detected as off, the
-     client refuses to attach. Disable cloud sync in Steam, click
-     Verify, and the check re-runs.
+   - **Steam Cloud check** — if not detected as off, a warning modal
+     opens. Disable cloud sync in Steam and click **Verify** to
+     re-run the check, or click **I've disabled cloud — proceed
+     anyway** if you've already disabled it (your choice is
+     remembered, so the modal won't reappear on this PC).
    - **Close the game** — if the game is open when you connect, the
      client waits for you to close it. The client needs the game
      closed so it can reconcile your save before it launches the
@@ -171,11 +175,17 @@ hatch.
   corrupted. Dismiss the warning; the game generates a fresh save
   and the client writes your starter content in. The warning won't
   appear on later launches into the same seed.
-- **"Steam Cloud must be disabled"** modal won't go away. The
-  client parses Steam's `remotecache.vdf` to detect cloud state and
-  fails closed (assumes cloud is on if it can't tell). If you're
-  certain cloud is off in Steam UI, launch from the command line
-  with `--ygo-cloud-disabled-confirmed` to bypass detection.
+- **"Steam Cloud check" modal keeps appearing.** The client parses
+  Steam's `remotecache.vdf` to detect cloud state; on some setups
+  the file is missing or uses a syncstate value we don't recognize.
+  The modal shows what we actually saw (e.g. `syncstate=8`) — if
+  you've already disabled cloud in Steam, click **I've disabled
+  cloud — proceed anyway** and the client persists your
+  acknowledgement to `Documents/ygo_lotd_ap/config.json` so the
+  modal won't reappear. To reset, delete the
+  `user_confirmed_cloud_off` key from that file. The legacy
+  `--ygo-cloud-disabled-confirmed` CLI flag still works as a
+  session-only bypass.
 - **"Game running — close it first"** but no game window is open.
   The client looks for `Lotd.exe`, `LotdLE.exe`, `YuGiOh.exe`, or
   `Yu-Gi-Oh!.exe`. A leftover process can hang around after a crash;
