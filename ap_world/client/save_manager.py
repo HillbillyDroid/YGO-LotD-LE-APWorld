@@ -200,10 +200,17 @@ def _documents_dir() -> Path:
     """Resolve %USERPROFILE%/Documents. SHGetKnownFolderPath would be more
     correct but adds a ctypes dependency; the env-var path matches Steam's
     own convention and is sufficient here."""
-    profile = os.environ.get("USERPROFILE")
-    if not profile:
+    # this means they are on windows
+    if os.name == 'nt' or os.environ.get("USERPROFILE"):
+        profile = os.environ.get("USERPROFILE")
+        if profile:
+            return Path(profile) / "Documents"
         raise SaveManagerError("USERPROFILE env var not set; cannot locate Documents")
-    return Path(profile) / "Documents"
+    # try linux instead
+    profile = Path("~/Documents").expanduser()
+    if profile.exists():
+        return profile / "Documents"
+    raise SaveManagerError("Could not find ~/Documents to save in. Define USERPROFILE env variable to define the save location.")
 
 
 def _hash_file(path: Path) -> str:
@@ -242,6 +249,7 @@ def _find_steam_path() -> Path:
       1. `HKCU\\Software\\Valve\\Steam` -> `SteamPath` (string).
       2. `%PROGRAMFILES(X86)%/Steam`.
       3. `C:/Program Files (x86)/Steam`.
+      4. `~/.local/share/Steam`.
     """
     if sys.platform == "win32":
         try:
@@ -260,11 +268,16 @@ def _find_steam_path() -> Path:
                 pass
 
     pf86 = os.environ.get("PROGRAMFILES(X86)") or r"C:\Program Files (x86)"
-    candidate = Path(pf86) / "Steam"
-    if candidate.exists():
-        return candidate
+    options = [
+        Path(pf86) / "Steam",
+        Path("~/.local/share").expanduser() / "Steam"
+    ]
+    for candidate in options:
+        if candidate.exists():
+            return candidate
+    options_joined = "\n".join(options)
     raise SaveManagerError(
-        f"Could not locate Steam install root (registry miss + {candidate} not found)"
+        f"Could not locate Steam install root (registry miss + None of these were found:\n{options_joined})"
     )
 
 
